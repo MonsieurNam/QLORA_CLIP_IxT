@@ -1,34 +1,37 @@
+# main.py (phiên bản cuối cùng)
 import torch
 from transformers import BitsAndBytesConfig, CLIPModel, CLIPProcessor
 from peft import get_peft_model, LoraConfig
 
+# Import các thành phần cần thiết
 from datasets import build_dataset
-from datasets.utils import build_data_loader 
+from datasets.utils import DatasetWrapper # Import lớp Wrapper trực tiếp
+from torch.utils.data import DataLoader # Import DataLoader của PyTorch
 
+# Các file mã nguồn mới của chúng ta
 from run_utils import get_arguments, set_random_seed
 from trainer import Trainer
-from metrics import cls_acc 
+# from metrics import cls_acc # không cần import ở đây nữa
+
+# Định nghĩa collate_fn
+def simple_collate_fn(batch):
+    images = [item[0] for item in batch]
+    targets = [item[1] for item in batch]
+    images_tensor = torch.stack(images, dim=0)
+    targets_tensor = torch.tensor(targets, dtype=torch.long)
+    return images_tensor, targets_tensor
 
 def main():
-    """
-    Hàm chính điều phối toàn bộ quy trình:
-    1. Đọc cấu hình.
-    2. Thiết lập mô hình QLoRA.
-    3. Chuẩn bị dữ liệu.
-    4. Khởi tạo và chạy Trainer.
-    """
-    
     args = get_arguments()
     set_random_seed(args.seed)
     
+    # ... (phần thiết lập mô hình QLoRA giữ nguyên) ...
     print("===== Cấu hình Thí nghiệm =====")
     for arg, value in sorted(vars(args).items()):
         print(f"{arg}: {value}")
     print("==============================\n")
 
-
     print(">>> Bước 1: Thiết lập Mô hình QLoRA...")
-    
     model_id_map = {
         'ViT-B/16': 'openai/clip-vit-base-patch16',
         'ViT-B/32': 'openai/clip-vit-base-patch32',
@@ -39,14 +42,10 @@ def main():
         raise ValueError(f"Backbone '{args.backbone}' không được hỗ trợ trong model_id_map.")
 
     if args.compute_dtype == 'auto':
-        if torch.cuda.is_available() and torch.cuda.is_bf16_supported():
-            compute_dtype = torch.bfloat16
-            print("Phát hiện hỗ trợ bfloat16. Sử dụng torch.bfloat16.")
-        else:
-            compute_dtype = torch.float16
-            print("Không phát hiện hỗ trợ bfloat16. Sử dụng torch.float16.")
+        compute_dtype = torch.bfloat16 if torch.cuda.is_available() and torch.cuda.is_bf16_supported() else torch.float16
     else:
         compute_dtype = torch.bfloat16 if args.compute_dtype == 'bf16' else torch.float16
+    print(f"Sử dụng compute_dtype: {compute_dtype}")
 
     quantization_config = BitsAndBytesConfig(
         load_in_4bit=True,
@@ -56,61 +55,58 @@ def main():
     )
 
     print(f"Đang tải mô hình '{model_id}' với QLoRA...")
-    model = CLIPModel.from_pretrained(
-        model_id,
-        quantization_config=quantization_config,
-        device_map="auto"  # Tự động phân bổ các lớp lên GPU/CPU nếu cần
-    )
+    model = CLIPModel.from_pretrained(model_id, quantization_config=quantization_config, device_map="auto")
     processor = CLIPProcessor.from_pretrained(model_id)
 
     print("\nÁp dụng cấu hình LoRA (PEFT)...")
-    target_modules = []
-    if 'q' in args.params: target_modules.append("q_proj")
-    if 'v' in args.params: target_modules.append("v_proj")
-    if 'k' in args.params: target_modules.append("k_proj")
-    if 'o' in args.params: target_modules.append("out_proj")
+    target_modules = [p + "_proj" for p in args.params]
     
     lora_config = LoraConfig(
-        r=args.r,
-        lora_alpha=args.alpha,
-        target_modules=target_modules,
-        lora_dropout=args.dropout_rate,
-        bias="none",
-        task_type="VISION_TEXT_DUAL_ENCODER"  # Quan trọng, chỉ định cho các mô hình 2 nhánh
+        r=args.r, lora_alpha=args.alpha, target_modules=target_modules,
+        lora_dropout=args.dropout_rate, bias="none", task_type="VISION_TEXT_DUAL_ENCODER"
     )
     
     model = get_peft_model(model, lora_config)
-    
-    print("\nThông tin mô hình sau khi áp dụng PEFT:")
     model.print_trainable_parameters()
 
-
+    # --- 3. Chuẩn bị Dữ liệu ---
     print("\n>>> Bước 2: Chuẩn bị Dữ liệu...")
-    
     dataset = build_dataset(args.dataset, args.root_path, args.shots, processor.image_processor)
     
-    train_loader = build_data_loader(
-        data_source=dataset.train_x,
+    # --- THAY ĐỔI CÁCH TẠO DATALOADER ---
+    # Sử dụng DataLoader của PyTorch trực tiếp với DatasetWrapper và collate_fn tùy chỉnh
+    
+    train_dataset_wrapper = DatasetWrapper(dataset.train_x, input_size=224, transform=processor.image_processor, is_train=True)
+    train_loader = DataLoader(
+        train_dataset_wrapper,
         batch_size=args.batch_size,
-        tfm=processor.image_processor, # Dùng transform cơ bản cho train
-        is_train=True,
-        shuffle=True
+        shuffle=True,
+        num_workers=2, # Giảm num_workers để tránh warning trên Colab
+        pin_memory=True,
+        collate_fn=simple_collate_fn # Sử dụng collate_fn của chúng ta
     )
-    eval_batch_size = args.batch_size * 2 
-    val_loader = build_data_loader(
-        data_source=dataset.val,
+
+    eval_batch_size = args.batch_size * 2
+    val_dataset_wrapper = DatasetWrapper(dataset.val, input_size=224, transform=processor.image_processor, is_train=False)
+    val_loader = DataLoader(
+        val_dataset_wrapper,
         batch_size=eval_batch_size,
-        tfm=processor.image_processor,
-        is_train=False,
-        shuffle=False
+        shuffle=False,
+        num_workers=2,
+        pin_memory=True,
+        collate_fn=simple_collate_fn
     )
-    test_loader = build_data_loader(
-        data_source=dataset.test,
+
+    test_dataset_wrapper = DatasetWrapper(dataset.test, input_size=224, transform=processor.image_processor, is_train=False)
+    test_loader = DataLoader(
+        test_dataset_wrapper,
         batch_size=eval_batch_size,
-        tfm=processor.image_processor,
-        is_train=False,
-        shuffle=False
+        shuffle=False,
+        num_workers=2,
+        pin_memory=True,
+        collate_fn=simple_collate_fn
     )
+    # --- KẾT THÚC THAY ĐỔI ---
     
     print(f"Dataset: {args.dataset}")
     print(f"  - Số mẫu huấn luyện (train_x): {len(dataset.train_x)}")
