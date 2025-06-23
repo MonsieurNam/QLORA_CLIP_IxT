@@ -44,22 +44,18 @@ def run_lora(args, clip_model, logit_scale, dataset, train_loader, val_loader, t
     
     VALIDATION = False
     
-    # Textual features
     print("\nGetting textual features as CLIP's classifier.")
     textual_features = clip_classifier(dataset.classnames, dataset.template, clip_model)
 
-    # Pre-load val features
     print("\nLoading visual features and labels from val set.")
     val_features, val_labels = pre_load_features(clip_model, val_loader)
 
-    # Pre-load test features
     print("\nLoading visual features and labels from test set.")
     test_features, test_labels = pre_load_features(clip_model, test_loader)
     
     test_features = test_features.cuda()
     test_labels = test_labels.cuda()
  
-    # Zero-shot CLIP
     clip_logits = logit_scale * test_features @ textual_features
     zs_acc = cls_acc(clip_logits, test_labels)
     print("\n**** Zero-shot CLIP's test accuracy: {:.2f}. ****\n".format(zs_acc))
@@ -89,15 +85,12 @@ def run_lora(args, clip_model, logit_scale, dataset, train_loader, val_loader, t
     if torch.cuda.is_available():
         torch.cuda.reset_peak_memory_stats()
     
-    # Sử dụng torch.amp.GradScaler theo cách mới để tránh warning
     scaler = torch.amp.GradScaler("cuda")
     count_iters = 0
     
-    # --- LOGIC HUẤN LUYỆN ĐÃ ĐƯỢC SỬA ĐỔI HOÀN TOÀN ---
     optimizer.zero_grad() # Reset gradient một lần trước khi bắt đầu
     
     while count_iters < total_iters:
-        # Vòng lặp này sẽ chạy qua train_loader nhiều lần nếu cần
         progress_bar = tqdm(train_loader, desc=f"Iter {count_iters}/{total_iters}")
         for i, (images, target) in enumerate(progress_bar):
             if count_iters >= total_iters:
@@ -106,12 +99,10 @@ def run_lora(args, clip_model, logit_scale, dataset, train_loader, val_loader, t
             clip_model.train() # Đặt ở đây để chắc chắn
             images, target = images.cuda(), target.cuda()
             
-            # --- Forward pass ---
             with torch.amp.autocast(device_type="cuda", dtype=torch.float16):
                 image_features = clip_model.encode_image(images)
                 image_features = image_features / image_features.norm(dim=-1, keepdim=True)
                 
-                # Logic text encoder từ mã gốc
                 if args.encoder == 'vision':
                     current_text_features = textual_features
                 else:
@@ -123,17 +114,12 @@ def run_lora(args, clip_model, logit_scale, dataset, train_loader, val_loader, t
                 cosine_similarity = logit_scale * image_features @ current_text_features.t()
                 loss = F.cross_entropy(cosine_similarity, target)
 
-            # --- Backward pass với Gradient Accumulation ---
-            # Chuẩn hóa loss
             loss = loss / args.gradient_accumulation_steps
             
-            # Tích lũy gradient
             scaler.scale(loss).backward()
             
-            # Cập nhật scheduler mỗi step nhỏ
             scheduler.step()
             
-            # Cập nhật optimizer chỉ sau một số bước nhất định
             if (count_iters + 1) % args.gradient_accumulation_steps == 0:
                 scaler.step(optimizer)
                 scaler.update()
@@ -143,7 +129,6 @@ def run_lora(args, clip_model, logit_scale, dataset, train_loader, val_loader, t
             progress_bar.set_description(f"Iter {count_iters}/{total_iters}")
             progress_bar.set_postfix({"Loss": f"{loss.item() * args.gradient_accumulation_steps:.4f}"})
 
-    # --- Kết thúc đo lường và Logging ---
     end_time = time.time()
     total_training_time = end_time - start_time
     peak_vram_gb = torch.cuda.max_memory_allocated() / (1024**3) if torch.cuda.is_available() else 0
@@ -152,8 +137,6 @@ def run_lora(args, clip_model, logit_scale, dataset, train_loader, val_loader, t
     print(f"Tổng thời gian huấn luyện: {format_time(total_training_time)}")
     print(f"Peak VRAM sử dụng: {peak_vram_gb:.2f} GB")
     print("--------------------------------------")
-    
-    # Đánh giá cuối cùng
     acc_test = evaluate_lora(args, clip_model, test_loader, dataset)
     print("**** Final test accuracy: {:.2f}%. ****\n".format(acc_test * 100))
     

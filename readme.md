@@ -30,23 +30,12 @@ watch -n 1 nvidia-smi
 ```
 # run with RTX4090
 ```
-python main.py \
-    --dataset stanford_cars \
-    --shots 16 \
-    --backbone "ViT-L/14" \
-    --seed 1 \
-    --batch_size 8 \
-    --gradient_accumulation_steps 4 \
-    --compute_dtype bf16
+chmod +x run_all.sh
+.\run_all.sh
 ```
 
 # run with Colab gpu T4
 ```
-python main.py \
-    --dataset eurosat \
-    --shots 16 \
-    --backbone "ViT-B/16" \
-    --seed 1 \
-    --batch_size 4 \
-    --gradient_accumulation_steps 8
+!chmod +x /content/QLORA_CLIP_IxT/run_all.sh
+!bash /content/QLORA_CLIP_IxT/run_all.sh
 ```
