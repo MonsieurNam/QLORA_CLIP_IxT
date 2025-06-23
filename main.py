@@ -1,19 +1,14 @@
-# main.py (phiên bản cuối cùng)
 import torch
 from transformers import BitsAndBytesConfig, CLIPModel, CLIPProcessor
 from peft import get_peft_model, LoraConfig
 
-# Import các thành phần cần thiết
 from datasets import build_dataset
 from datasets.utils import DatasetWrapper # Import lớp Wrapper trực tiếp
 from torch.utils.data import DataLoader # Import DataLoader của PyTorch
 
-# Các file mã nguồn mới của chúng ta
 from run_utils import get_arguments, set_random_seed
 from trainer import Trainer
-# from metrics import cls_acc # không cần import ở đây nữa
 
-# Định nghĩa collate_fn
 def simple_collate_fn(batch):
     images = [item[0] for item in batch]
     targets = [item[1] for item in batch]
@@ -25,7 +20,6 @@ def main():
     args = get_arguments()
     set_random_seed(args.seed)
     
-    # ... (phần thiết lập mô hình QLoRA giữ nguyên) ...
     print("===== Cấu hình Thí nghiệm =====")
     for arg, value in sorted(vars(args).items()):
         print(f"{arg}: {value}")
@@ -69,12 +63,9 @@ def main():
     model = get_peft_model(model, lora_config)
     model.print_trainable_parameters()
 
-    # --- 3. Chuẩn bị Dữ liệu ---
     print("\n>>> Bước 2: Chuẩn bị Dữ liệu...")
     dataset = build_dataset(args.dataset, args.root_path, args.shots, processor.image_processor)
     
-    # --- THAY ĐỔI CÁCH TẠO DATALOADER ---
-    # Sử dụng DataLoader của PyTorch trực tiếp với DatasetWrapper và collate_fn tùy chỉnh
     
     train_dataset_wrapper = DatasetWrapper(dataset.train_x, input_size=224, transform=processor.image_processor, is_train=True)
     train_loader = DataLoader(
@@ -106,7 +97,6 @@ def main():
         pin_memory=True,
         collate_fn=simple_collate_fn
     )
-    # --- KẾT THÚC THAY ĐỔI ---
     
     print(f"Dataset: {args.dataset}")
     print(f"  - Số mẫu huấn luyện (train_x): {len(dataset.train_x)}")
