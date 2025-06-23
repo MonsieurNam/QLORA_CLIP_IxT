@@ -2,16 +2,24 @@ import torch
 import torch.nn.functional as F
 from tqdm import tqdm
 import os
+import time # <--- Thêm import time
 
 # Giả định file metrics.py chứa hàm cls_acc
 from metrics import cls_acc
+
+# Hàm trợ giúp để format thời gian
+def format_time(seconds):
+    """Chuyển đổi giây thành định dạng Giờ:Phút:Giây."""
+    m, s = divmod(seconds, 60)
+    h, m = divmod(m, 60)
+    return f"{int(h):02d}:{int(m):02d}:{int(s):02d}"
 
 class Trainer:
     """
     Lớp đóng gói logic huấn luyện và đánh giá cho mô hình CLIP với QLoRA.
     """
     def __init__(self, args, model, processor, dataset, train_loader, val_loader, test_loader):
-        # ... (giữ nguyên hàm __init__) ...
+        # ... (giữ nguyên các thuộc tính khác) ...
         self.args = args
         self.model = model
         self.processor = processor
@@ -38,9 +46,9 @@ class Trainer:
         self._cached_text_features = None
 
     def _get_text_features(self):
-        # ... (giữ nguyên hàm _get_text_features) ...
+        # ... (giữ nguyên hàm này) ...
         if self._cached_text_features is None:
-            print("Đang tạo và cache các đặc trưng text...")
+            # print("Đang tạo và cache các đặc trưng text...") # Có thể tắt bớt log này
             texts = [self.dataset.template[0].format(c.replace('_', ' ')) for c in self.dataset.classnames]
             text_inputs = self.processor(
                 text=texts, 
@@ -57,23 +65,26 @@ class Trainer:
 
     def train(self):
         print("\n===== Bắt đầu Huấn luyện =====")
-        # ... (giữ nguyên các dòng print) ...
+        print(f"Tổng số vòng lặp (iterations): {self.total_iters}")
+        print(f"Effective batch size: {self.args.batch_size * self.args.gradient_accumulation_steps}")
+
+        # --- Bắt đầu đo thời gian và bộ nhớ ---
+        start_time = time.time()
+        if torch.cuda.is_available():
+            torch.cuda.reset_peak_memory_stats() # Reset bộ đếm VRAM
+        # ------------------------------------
+
         count_iters = 0
         self.model.train()
         
         while count_iters < self.total_iters:
+            # ... (vòng lặp huấn luyện giữ nguyên) ...
             progress_bar = tqdm(self.train_loader, desc=f"Iter {count_iters}/{self.total_iters}")
             for i, batch in enumerate(progress_bar):
                 if count_iters >= self.total_iters:
                     break
                 
                 images, target = batch
-
-                # ===== SỬA LỖI Ở ĐÂY =====
-                # if isinstance(images, list):
-                #     images = images[0]
-                # =========================
-                
                 images = images.to(self.model.device)
                 target = target.to(self.model.device)
                 
@@ -101,15 +112,32 @@ class Trainer:
 
                 count_iters += 1
         
-        print("\nHuấn luyện hoàn tất.")
+        # --- Kết thúc đo thời gian và lấy VRAM ---
+        end_time = time.time()
+        total_training_time = end_time - start_time
+        
+        if torch.cuda.is_available():
+            peak_vram_gb = torch.cuda.max_memory_allocated() / (1024**3)
+        else:
+            peak_vram_gb = 0
+        # ------------------------------------------
+
+        print("\n--- Thống kê Tài nguyên ---")
+        print(f"Tổng thời gian huấn luyện: {format_time(total_training_time)}")
+        print(f"Peak VRAM sử dụng: {peak_vram_gb:.2f} GB")
+        print("--------------------------")
+        
+        # Đánh giá trên tập test
         self.evaluate("test")
         
+        # Lưu lại adapter nếu có
         if self.args.save_path:
             save_dir = os.path.join(self.args.save_path, f"{self.args.dataset}_{self.args.shots}shots")
             print(f"Lưu adapter LoRA đã huấn luyện vào '{save_dir}'")
             self.model.save_pretrained(save_dir)
 
     def evaluate(self, split="test"):
+        # ... (hàm này giữ nguyên, không cần thay đổi) ...
         print(f"\n===== Bắt đầu Đánh giá trên tập {split.upper()} =====")
         self.model.eval()
         loader = self.test_loader if split == "test" else self.val_loader
@@ -119,12 +147,6 @@ class Trainer:
             text_features = self._get_text_features()
             for batch in tqdm(loader, desc=f"Đang đánh giá trên tập {split}"):
                 images, target = batch
-                
-                # ===== SỬA LỖI Ở ĐÂY (GIỮ NGUYÊN) =====
-                # if isinstance(images, list):
-                #     images = images[0]
-                # ======================================
-
                 images = images.to(self.model.device)
                 target = target.to(self.model.device)
                 
