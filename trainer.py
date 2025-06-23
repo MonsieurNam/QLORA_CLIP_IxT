@@ -139,7 +139,6 @@ class Trainer:
         final_test_acc = self.evaluate("test")
         print("------------------------------------")
         
-        self.evaluate("test")
         
         if self.args.save_path:
             save_dir = os.path.join(self.args.save_path, f"{self.args.dataset}_{self.args.shots}shots")
