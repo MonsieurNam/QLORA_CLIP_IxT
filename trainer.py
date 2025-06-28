@@ -97,7 +97,7 @@ class Trainer:
                 logit_scale = self.model.logit_scale.exp()
                 logits = logit_scale * image_features @ text_features.t()
                 
-                loss = F.cross_entropy(logits, target)
+                loss = F.cross_entropy(logits, target, label_smoothing=0.1)
                 
                 current_loss = loss.item()
                 epoch_loss += current_loss * len(target)
