@@ -5,6 +5,10 @@ from peft import get_peft_model, LoraConfig
 from datasets import build_dataset
 from datasets.utils import DatasetWrapper # Import lớp Wrapper trực tiếp
 from torch.utils.data import DataLoader # Import DataLoader của PyTorch
+from torchvision.transforms import (
+    Compose, ToTensor, Normalize, RandomResizedCrop, 
+    RandomHorizontalFlip, InterpolationMode, RandAugment
+)
 
 from run_utils import get_arguments, set_random_seed
 from trainer import Trainer
@@ -64,38 +68,46 @@ def main():
     model.print_trainable_parameters()
 
     print("\n>>> Bước 2: Chuẩn bị Dữ liệu...")
-    dataset = build_dataset(args.dataset, args.root_path, args.shots, processor.image_processor)
+    dataset = build_dataset(args.dataset, args.root_path, args.shots)
     
     
-    train_dataset_wrapper = DatasetWrapper(dataset.train_x, input_size=224, transform=processor.image_processor, is_train=True)
+    eval_transform = Compose([
+        Resize(224, interpolation=InterpolationMode.BICUBIC),
+        CenterCrop(224),
+        ToTensor(),
+        Normalize((0.48145466, 0.4578275, 0.40821073), (0.26862954, 0.26130258, 0.27577711)),
+    ])
+
+    # Định nghĩa Train Transform với Augmentation mạnh mẽ
+    train_transform = Compose([
+        RandomResizedCrop(size=224, scale=(0.5, 1.0), interpolation=InterpolationMode.BICUBIC),
+        RandomHorizontalFlip(p=0.5),
+        RandAugment(num_ops=2, magnitude=9), # Augmentation mạnh
+        ToTensor(),
+        Normalize((0.48145466, 0.4578275, 0.40821073), (0.26862954, 0.26130258, 0.27577711)),
+    ])
+    
+    train_dataset_wrapper = DatasetWrapper(dataset.train_x, transform=train_transform)
+    val_dataset_wrapper = DatasetWrapper(dataset.val, transform=eval_transform)
+    test_dataset_wrapper = DatasetWrapper(dataset.test, transform=eval_transform)
+    
     train_loader = DataLoader(
         train_dataset_wrapper,
         batch_size=args.batch_size,
         shuffle=True,
-        num_workers=2, # Giảm num_workers để tránh warning trên Colab
+        num_workers=2, 
         pin_memory=True,
-        collate_fn=simple_collate_fn # Sử dụng collate_fn của chúng ta
+        collate_fn=simple_collate_fn 
     )
 
     eval_batch_size = args.batch_size * 2
-    val_dataset_wrapper = DatasetWrapper(dataset.val, input_size=224, transform=processor.image_processor, is_train=False)
     val_loader = DataLoader(
-        val_dataset_wrapper,
-        batch_size=eval_batch_size,
-        shuffle=False,
-        num_workers=2,
-        pin_memory=True,
-        collate_fn=simple_collate_fn
+        val_dataset_wrapper, batch_size=eval_batch_size, shuffle=False,
+        num_workers=2, pin_memory=True, collate_fn=simple_collate_fn
     )
-
-    test_dataset_wrapper = DatasetWrapper(dataset.test, input_size=224, transform=processor.image_processor, is_train=False)
     test_loader = DataLoader(
-        test_dataset_wrapper,
-        batch_size=eval_batch_size,
-        shuffle=False,
-        num_workers=2,
-        pin_memory=True,
-        collate_fn=simple_collate_fn
+        test_dataset_wrapper, batch_size=eval_batch_size, shuffle=False,
+        num_workers=2, pin_memory=True, collate_fn=simple_collate_fn
     )
     
     print(f"Dataset: {args.dataset}")

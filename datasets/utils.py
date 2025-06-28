@@ -9,6 +9,7 @@ import json
 import torch
 from torch.utils.data import Dataset as TorchDataset
 import torchvision.transforms as T
+from torchvision.transforms import ToTensor
 from PIL import Image
 
 # ==================================================================
@@ -184,36 +185,23 @@ class DatasetWrapper(TorchDataset):
     Lớp Wrapper để chuyển đổi một data_source (danh sách các Datum)
     thành một đối tượng Dataset mà PyTorch DataLoader có thể sử dụng.
     """
-    def __init__(self, data_source, input_size, transform=None, is_train=False, **kwargs):
+    def __init__(self, data_source, transform=None):
         self.data_source = data_source
         self.transform = transform # Đây sẽ là processor.image_processor
-        self.is_train = is_train
-        self.input_size = input_size
 
     def __len__(self):
         return len(self.data_source)
 
     def __getitem__(self, idx):
-        """
-        Lấy một mẫu (sample) từ dataset và xử lý nó.
-        """
         item = self.data_source[idx]
-
-        # 1. Đọc ảnh từ đường dẫn dưới dạng ảnh PIL
         img0 = read_image(item.impath)
+        
+        if self.transform:
+            img_tensor = self.transform(img0)
+        else:
+            # Fallback nếu không có transform
+            img_tensor = ToTensor()(img0)
 
-        # 2. Kiểm tra xem transform (processor) có tồn tại không
-        if self.transform is None:
-            raise ValueError("Transform (processor) không được cung cấp cho DatasetWrapper.")
-            
-        # 3. Áp dụng transform (processor) cho ảnh PIL
-        # Đầu ra là một đối tượng kiểu dictionary (BatchFeature).
-        processed_output = self.transform(images=img0, return_tensors="pt")
-
-        # 4. Trích xuất tensor 'pixel_values' và loại bỏ chiều batch thừa
-        img_tensor = processed_output['pixel_values'].squeeze(0)
-
-        # 5. Trả về một tuple (tensor_ảnh, nhãn)
         return img_tensor, item.label
 
 # ==================================================================
