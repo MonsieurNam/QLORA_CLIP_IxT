@@ -7,7 +7,7 @@ from datasets.utils import DatasetWrapper # Import lớp Wrapper trực tiếp
 from torch.utils.data import DataLoader # Import DataLoader của PyTorch
 from torchvision.transforms import (
     Compose, ToTensor, Normalize, RandomResizedCrop, 
-    RandomHorizontalFlip, InterpolationMode, RandAugment
+    RandomHorizontalFlip, InterpolationMode, RandAugment, Resize, CenterCrop
 )
 
 from run_utils import get_arguments, set_random_seed
