@@ -1,3 +1,4 @@
+# %%writefile /content/QLORA_CLIP_IxT/datasets/fgvc.py
 import os
 
 from .utils import Datum, DatasetBase, read_json, write_json, build_data_loader
@@ -5,13 +6,18 @@ from .utils import Datum, DatasetBase, read_json, write_json, build_data_loader
 """
 template = ['a photo of a {}, a type of aircraft.']
 """
-template = ['a photo of a {}.']
+template = [
+    'a photo of a {}, a type of aircraft.',
+    'a photo of the {} aircraft.',
+    'a satellite image of a {}.',
+    'a drawing of a {}.',
+]
 class FGVCAircraft(DatasetBase):
 
     dataset_dir = 'fgvc_aircraft'
 
     def __init__(self, root, num_shots):
-        
+
         self.dataset_dir = os.path.join(root, self.dataset_dir)
         self.image_dir = os.path.join(self.dataset_dir, 'images')
 
@@ -27,18 +33,18 @@ class FGVCAircraft(DatasetBase):
         train = self.read_data(cname2lab, 'images_variant_train.txt')
         val = self.read_data(cname2lab, 'images_variant_val.txt')
         test = self.read_data(cname2lab, 'images_variant_test.txt')
-        
+
         n_shots_val = min(num_shots, 4)
         val = self.generate_fewshot_dataset(val, num_shots=n_shots_val)
-        
+
         train = self.generate_fewshot_dataset(train, num_shots=num_shots)
-        
+
         super().__init__(train_x=train, val=val, test=test)
-    
+
     def read_data(self, cname2lab, split_file):
         filepath = os.path.join(self.dataset_dir, split_file)
         items = []
-        
+
         with open(filepath, 'r') as f:
             lines = f.readlines()
             for line in lines:
@@ -53,5 +59,5 @@ class FGVCAircraft(DatasetBase):
                     classname=classname
                 )
                 items.append(item)
-        
+
         return items
