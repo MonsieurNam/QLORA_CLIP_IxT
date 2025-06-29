@@ -5,7 +5,10 @@ qlora-clip/
 ├── main.py
 ├── trainer.py
 ├── run_utils.py
-├── utils.py       <-- File này cũng phải nằm trong thư mục gốc
+├── utils.py      
+├── run_lora.sh
+├── run_qlora.sh
+├── run_dora.sh
 ├── datasets/
 │   ├── __init__.py
 │   ├── caltech101.py
@@ -20,7 +23,7 @@ qlora-clip/
 │   ├── sun397.py
 │   ├── ucf101.py
 │   └── utils.py   <-- File utils.py của repo gốc nằm ở đây
-└── data/
+└── DATA/
     └── ...
 ```
 
@@ -30,12 +33,21 @@ watch -n 1 nvidia-smi
 ```
 # run with RTX4090
 ```
-chmod +x run_all.sh
-.\run_all.sh
+chmod +x run_qlora.sh
+chmod +x run_lora.sh
+chmod +x run_dora.sh
+./run_qlora.sh
+./run_lora.sh
+./run_dora.sh
 ```
 
 # run with Colab gpu T4
 ```
-!chmod +x /content/QLORA_CLIP_IxT/run_all.sh
-!bash /content/QLORA_CLIP_IxT/run_all.sh
+!/content/QLORA_CLIP_IxT/chmod +x run_qlora.sh
+!/content/QLORA_CLIP_IxT/chmod +x run_lora.sh
+!/content/QLORA_CLIP_IxT/chmod +x run_dora.sh
+
+!bash /content/QLORA_CLIP_IxT/run_qlora.sh
+!bash /content/QLORA_CLIP_IxT/run_lora.sh
+!bash /content/QLORA_CLIP_IxT/run_dora.sh
 ```
