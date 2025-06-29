@@ -185,7 +185,15 @@ imagenet_templates = ["itap of a {}.",
                         "a photo of the small {}."]
 
 """
-imagenet_templates = ["a photo of a {}."]
+imagenet_templates = [
+    'a photo of a {}.',
+    'a bad photo of a {}.',
+    'a origami {}.',
+    'a photo of the large {}.',
+    'a {} in a video game.',
+    'art of a {}.',
+    'a photo of the small {}.'
+]
 
 class ImageNet():
 

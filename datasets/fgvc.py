@@ -9,8 +9,11 @@ template = ['a photo of a {}, a type of aircraft.']
 template = [
     'a photo of a {}, a type of aircraft.',
     'a photo of the {} aircraft.',
-    'a satellite image of a {}.',
+    'a photo of a {}.',
+    'a picture of the {}.',
     'a drawing of a {}.',
+    'a satellite image of a {}.', # Có thể không quá liên quan nhưng tạo sự đa dạng
+    'the {} aircraft in the sky.'
 ]
 class FGVCAircraft(DatasetBase):
 
