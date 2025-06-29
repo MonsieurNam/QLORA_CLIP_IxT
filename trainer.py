@@ -30,7 +30,7 @@ class Trainer:
             model.parameters(),
             lr=args.lr,
             betas=(0.9, 0.999),
-            weight_decay=0.01
+            weight_decay=1e-2
         )
 
         self.total_iters = args.n_iters * args.shots

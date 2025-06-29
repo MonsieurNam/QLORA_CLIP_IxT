@@ -43,9 +43,9 @@ chmod +x run_dora.sh
 
 # run with Colab gpu T4
 ```
-!/content/QLORA_CLIP_IxT/chmod +x run_qlora.sh
-!/content/QLORA_CLIP_IxT/chmod +x run_lora.sh
-!/content/QLORA_CLIP_IxT/chmod +x run_dora.sh
+!chmod +x run_qlora.sh
+!chmod +x run_lora.sh
+!chmod +x run_dora.sh
 
 !bash /content/QLORA_CLIP_IxT/run_qlora.sh
 !bash /content/QLORA_CLIP_IxT/run_lora.sh

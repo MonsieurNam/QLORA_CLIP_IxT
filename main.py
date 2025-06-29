@@ -3,7 +3,7 @@ import torch
 from transformers import BitsAndBytesConfig, CLIPModel, CLIPProcessor
 from peft import get_peft_model, LoraConfig
 
-from datasets.build import build_dataset
+from datasets import build_dataset
 from datasets.utils import DatasetWrapper
 from torch.utils.data import DataLoader
 from torchvision.transforms import (
