@@ -1,27 +1,17 @@
-#!/bin/bash
-
-# ======================================================
-#            Script chạy thí nghiệm DoRA
-# ======================================================
-# Chế độ này sử dụng DoRA (Weight-Decomposed Low-Rank Adaptation)
-# thay cho LoRA. Nó có thể được kết hợp với cả chế độ 'qlora'
-# và 'lora'. Ở đây ta ví dụ với 'qlora'.
-
-# --- Cấu hình Thí nghiệm ---
-SHOTS=16
+SHOTS=1
 BACKBONE="ViT-B/16"
-SEED=42
-BATCH_SIZE=8
-ACCUM_STEPS=4
+SEED=1
+BATCH_SIZE=4
+ACCUM_STEPS=8
 LEARNING_RATE=1e-4
 RANK=16
 ALPHA=32
 N_ITERS=$((500 * SHOTS))
+DROPOUT=0.25
+# 'dtd', 'eurosat', 'caltech101', 'food101', 'oxford_pets', 'stanford_cars', 'oxford_flowers', 'sun397', 'ucf101', 'imagenet', 'fgvc'
 
-# Danh sách các dataset bạn muốn chạy
-DATASETS=("food101" "dtd")
+DATASETS=("oxford_flowers")
 
-# --- Vòng lặp chạy Thí nghiệm ---
 for DATASET_NAME in "${DATASETS[@]}"; do
 
   echo "==========================================================="
@@ -32,18 +22,19 @@ for DATASET_NAME in "${DATASETS[@]}"; do
     --mode "qlora" \
     --use_dora \
     --dataset "$DATASET_NAME" \
-    --root_path "./data" \
+    --root_path "/content/DATA" \
     --shots "$SHOTS" \
     --backbone "$BACKBONE" \
     --lr "$LEARNING_RATE" \
     --r "$RANK" \
     --alpha "$ALPHA" \
+    --dropout_rate "$DROPOUT" \
     --seed "$SEED" \
-    --lora_target_modules q_proj k_proj v_proj out_proj fc1 fc2 \
+    --lora_target_modules q_proj k_proj v_proj \
     --batch_size "$BATCH_SIZE" \
     --gradient_accumulation_steps "$ACCUM_STEPS" \
     --n_iters "$N_ITERS" \
-    --save_path "./checkpoints"
+    --save_path "/content/checkpoints"
 
   echo "Hoàn tất huấn luyện DoRA trên: ${DATASET_NAME}"
   echo ""
