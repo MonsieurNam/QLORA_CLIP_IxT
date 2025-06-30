@@ -22,7 +22,7 @@ qlora-clip/
 │   ├── stanford_cars.py
 │   ├── sun397.py
 │   ├── ucf101.py
-│   └── utils.py   <-- File utils.py của repo gốc nằm ở đây
+│   └── utils.py   
 └── DATA/
     └── ...
 ```

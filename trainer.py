@@ -1,4 +1,3 @@
-# %%writefile /content/QLORA_CLIP_IxT/trainer.py
 import torch
 import torch.nn.functional as F
 from tqdm import tqdm
@@ -16,6 +15,7 @@ def format_time(seconds):
 class Trainer:
     """
     Lớp đóng gói logic huấn luyện và đánh giá cho mô hình CLIP với QLoRA.
+    Phiên bản này được cập nhật để huấn luyện đồng thời cả Vision và Text Encoder.
     """
     def __init__(self, args, model, processor, dataset, train_loader, val_loader, test_loader):
         self.args = args
@@ -33,7 +33,8 @@ class Trainer:
             weight_decay=1e-2
         )
 
-        self.total_iters = args.n_iters * args.shots
+        self.total_iters = args.n_iters
+        
 
         self.scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
             self.optimizer,
@@ -41,26 +42,18 @@ class Trainer:
             eta_min=1e-6
         )
 
-        self._cached_text_features = None
+        print("Tokenizing text prompts for training and evaluation...")
+        texts = [self.dataset.template[0].format(c.replace('_', ' ')) for c in self.dataset.classnames]
+        self.text_inputs = self.processor(
+            text=texts,
+            return_tensors="pt",
+            padding=True,
+            truncation=True
+        ).to(self.model.device)
 
-    def _get_text_features(self):
-        if self._cached_text_features is None:
-            texts = [self.dataset.template[0].format(c.replace('_', ' ')) for c in self.dataset.classnames]
-            text_inputs = self.processor(
-                text=texts,
-                return_tensors="pt",
-                padding=True,
-                truncation=True
-            ).to(self.model.device)
-
-            with torch.no_grad():
-                text_features = self.model.get_text_features(**text_inputs)
-                self._cached_text_features = text_features / text_features.norm(dim=-1, keepdim=True)
-
-        return self._cached_text_features
 
     def train(self):
-        print("\n===== Bắt đầu Huấn luyện =====")
+        print("\n===== Bắt đầu Huấn luyện (Vision + Text Encoders) =====")
         print(f"Tổng số vòng lặp (iterations): {self.total_iters}")
         print(f"Effective batch size: {self.args.batch_size * self.args.gradient_accumulation_steps}")
 
@@ -71,7 +64,7 @@ class Trainer:
         count_iters = 0
         self.model.train()
 
-        num_epochs = (self.total_iters // len(self.train_loader)) + 1
+        num_epochs = max(1, (self.total_iters // len(self.train_loader)) + 1)
 
         for epoch in range(num_epochs):
             if count_iters >= self.total_iters:
@@ -91,18 +84,19 @@ class Trainer:
                 target = target.to(self.model.device)
 
                 image_features = self.model.get_image_features(pixel_values=images)
-                image_features = image_features / image_features.norm(dim=-1, keepdim=True)
 
-                text_features = self._get_text_features()
+                text_features = self.model.get_text_features(**self.text_inputs)
+                
+                image_features = image_features / image_features.norm(dim=-1, keepdim=True)
+                text_features = text_features / text_features.norm(dim=-1, keepdim=True)
 
                 logit_scale = self.model.logit_scale.exp()
                 logits = logit_scale * image_features @ text_features.t()
-
                 loss = F.cross_entropy(logits, target)
 
                 current_loss = loss.item()
                 epoch_loss += current_loss * len(target)
-                epoch_acc += cls_acc(logits, target) * len(target)
+                epoch_acc += cls_acc(logits.cpu(), target.cpu()) * len(target)
                 epoch_samples += len(target)
 
                 loss = loss / self.args.gradient_accumulation_steps
@@ -137,14 +131,14 @@ class Trainer:
         print(f"Tổng thời gian huấn luyện: {format_time(total_training_time)}")
         print(f"Peak VRAM sử dụng: {peak_vram_gb:.2f} GB")
 
-        final_test_acc = self.evaluate("test")
+        self.evaluate("test")
         print("------------------------------------")
 
-
         if self.args.save_path:
-            save_dir = os.path.join(self.args.save_path, f"{self.args.dataset}_{self.args.shots}shots")
+            save_dir = os.path.join(self.args.save_path, f"{self.args.dataset}_{self.args.shots}shots_seed{self.args.seed}")
             print(f"Lưu adapter LoRA đã huấn luyện vào '{save_dir}'")
             self.model.save_pretrained(save_dir)
+
 
     def evaluate(self, split="test"):
         print(f"\n===== Bắt đầu Đánh giá trên tập {split.upper()} =====")
@@ -153,7 +147,9 @@ class Trainer:
         total_acc, total_samples = 0., 0
 
         with torch.no_grad():
-            text_features = self._get_text_features()
+            text_features_eval = self.model.get_text_features(**self.text_inputs)
+            text_features_eval = text_features_eval / text_features_eval.norm(dim=-1, keepdim=True)
+
             for batch in tqdm(loader, desc=f"Đang đánh giá trên tập {split}"):
                 images, target = batch
                 images = images.to(self.model.device)
@@ -163,7 +159,7 @@ class Trainer:
                 image_features = image_features / image_features.norm(dim=-1, keepdim=True)
 
                 logit_scale = self.model.logit_scale.exp()
-                logits = logit_scale * image_features @ text_features.t()
+                logits = logit_scale * image_features @ text_features_eval.t()
 
                 acc = cls_acc(logits, target)
                 total_acc += acc * len(target)

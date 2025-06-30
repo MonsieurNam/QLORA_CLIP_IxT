@@ -16,7 +16,7 @@ ACCUM_STEPS=4
 LEARNING_RATE=1e-4
 RANK=16
 ALPHA=32
-N_ITERS=5000
+N_ITERS=$((500 * SHOTS))
 
 # Danh sách các dataset bạn muốn chạy
 DATASETS=("food101" "dtd")

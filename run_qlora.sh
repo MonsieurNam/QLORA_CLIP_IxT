@@ -16,7 +16,7 @@ ACCUM_STEPS=4
 LEARNING_RATE=1e-4  # QLoRA thường hoạt động tốt với LR cao hơn một chút
 RANK=16
 ALPHA=32
-N_ITERS=5000
+N_ITERS=$((500 * SHOTS))
 
 # Danh sách các dataset bạn muốn chạy
 # 'dtd' 'eurosat' 'food101' 'oxford_pets' 'stanford_cars' 'ucf101' 'imagenet'

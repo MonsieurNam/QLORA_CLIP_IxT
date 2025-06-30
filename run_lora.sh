@@ -16,7 +16,7 @@ ACCUM_STEPS=1
 LEARNING_RATE=2e-4  # LR theo paper CLIP-LoRA
 RANK=2              # Rank thấp theo paper CLIP-LoRA
 ALPHA=2             # Alpha thấp theo paper CLIP-LoRA
-N_ITERS=10000
+N_ITERS=$((500 * SHOTS))
 
 # Danh sách các dataset bạn muốn chạy
 DATASETS=("food101" "dtd")
