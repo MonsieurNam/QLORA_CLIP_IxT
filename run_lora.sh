@@ -9,6 +9,7 @@ ALPHA=16
 N_ITERS=$((500 * SHOTS))
 DROPOUT=0.25
 # 'dtd', 'eurosat', 'caltech101', 'food101', 'oxford_pets', 'stanford_cars', 'oxford_flowers', 'sun397', 'ucf101', 'imagenet', 'fgvc'
+export TOKENIZERS_PARALLELISM=false
 
 DATASETS=("oxford_flowers")
 

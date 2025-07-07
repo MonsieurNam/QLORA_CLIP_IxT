@@ -1,3 +1,4 @@
+# %%writefile /content/QLORA_CLIP_IxT/trainer.py
 import torch
 import torch.nn.functional as F
 from tqdm import tqdm
@@ -15,7 +16,8 @@ def format_time(seconds):
 class Trainer:
     """
     Lớp đóng gói logic huấn luyện và đánh giá cho mô hình CLIP với QLoRA.
-    Phiên bản này được cập nhật để huấn luyện đồng thời cả Vision và Text Encoder.
+    Phiên bản này được cập nhật để huấn luyện đồng thời cả Vision và Text Encoder
+    và xử lý đúng việc phân phối thiết bị với device_map="auto".
     """
     def __init__(self, args, model, processor, dataset, train_loader, val_loader, test_loader):
         self.args = args
@@ -34,7 +36,6 @@ class Trainer:
         )
 
         self.total_iters = args.n_iters
-        
 
         self.scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
             self.optimizer,
@@ -44,13 +45,13 @@ class Trainer:
 
         print("Tokenizing text prompts for training and evaluation...")
         texts = [self.dataset.template[0].format(c.replace('_', ' ')) for c in self.dataset.classnames]
+
         self.text_inputs = self.processor(
             text=texts,
             return_tensors="pt",
             padding=True,
             truncation=True
-        ).to(self.model.device)
-
+        )
 
     def train(self):
         print("\n===== Bắt đầu Huấn luyện (Vision + Text Encoders) =====")
@@ -80,13 +81,17 @@ class Trainer:
                     break
 
                 images, target = batch
-                images = images.to(self.model.device)
-                target = target.to(self.model.device)
+
+                model_device = next(self.model.parameters()).device
+
+                images = images.to(model_device)
+                target = target.to(model_device)
+
+                text_inputs_on_device = {key: val.to(model_device) for key, val in self.text_inputs.items()}
 
                 image_features = self.model.get_image_features(pixel_values=images)
+                text_features = self.model.get_text_features(**text_inputs_on_device)
 
-                text_features = self.model.get_text_features(**self.text_inputs)
-                
                 image_features = image_features / image_features.norm(dim=-1, keepdim=True)
                 text_features = text_features / text_features.norm(dim=-1, keepdim=True)
 
@@ -139,21 +144,23 @@ class Trainer:
             print(f"Lưu adapter LoRA đã huấn luyện vào '{save_dir}'")
             self.model.save_pretrained(save_dir)
 
-
     def evaluate(self, split="test"):
         print(f"\n===== Bắt đầu Đánh giá trên tập {split.upper()} =====")
         self.model.eval()
         loader = self.test_loader if split == "test" else self.val_loader
         total_acc, total_samples = 0., 0
 
+        model_device = next(self.model.parameters()).device
+        text_inputs_on_device = {key: val.to(model_device) for key, val in self.text_inputs.items()}
+
         with torch.no_grad():
-            text_features_eval = self.model.get_text_features(**self.text_inputs)
+            text_features_eval = self.model.get_text_features(**text_inputs_on_device)
             text_features_eval = text_features_eval / text_features_eval.norm(dim=-1, keepdim=True)
 
             for batch in tqdm(loader, desc=f"Đang đánh giá trên tập {split}"):
                 images, target = batch
-                images = images.to(self.model.device)
-                target = target.to(self.model.device)
+                images = images.to(model_device)
+                target = target.to(model_device)
 
                 image_features = self.model.get_image_features(pixel_values=images)
                 image_features = image_features / image_features.norm(dim=-1, keepdim=True)

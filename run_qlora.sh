@@ -8,6 +8,7 @@ DROPOUT=0.25
 RANK=16
 ALPHA=32
 N_ITERS=$((500 * SHOTS))
+export TOKENIZERS_PARALLELISM=false
 
 # 'dtd', 'eurosat', 'caltech101', 'food101', 'oxford_pets', 'stanford_cars', 'oxford_flowers', 'sun397', 'ucf101', 'imagenet', 'fgvc'
 
