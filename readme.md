@@ -45,7 +45,7 @@ QLoRA provides immense efficiency gains in both memory and speed without comprom
 
 1.  **Clone the repository:**
     ```bash
-    git clone [https://github.com/your-username/qlora-clip.git](https://github.com/MonsieurNam/QLORA_CLIP_IxT.git)
+    git clone https://github.com/MonsieurNam/QLORA_CLIP_IxT.git
     cd qlora-clip
     ```
 
