@@ -58,7 +58,8 @@ QLoRA provides immense efficiency gains in both memory and speed without comprom
 3.  **Install dependencies:**
     We recommend using PyTorch 2.1 or higher with CUDA 11.8 or 12.1.
     ```bash
-    pip install torch torchvision torchaudio
+    pip install "numpy<2.0"
+    pip install torch==2.1.1 torchvision==0.16.1
     pip install -r requirements.txt
     ```
     *Note: The `requirements.txt` should include `transformers`, `peft`, `bitsandbytes`, `datasets`, `tqdm`, `scikit-learn`.*

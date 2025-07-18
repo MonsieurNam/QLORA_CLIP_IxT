@@ -4,6 +4,7 @@ import torch.nn.functional as F
 from tqdm import tqdm
 import os
 import time
+from bitsandbytes.optim import PagedAdamW8bit
 
 from metrics import cls_acc
 
