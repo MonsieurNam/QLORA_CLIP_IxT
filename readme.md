@@ -45,7 +45,7 @@ QLoRA provides immense efficiency gains in both memory and speed without comprom
 
 1.  **Clone the repository:**
     ```bash
-    git clone https://github.com/your-username/qlora-clip.git
+    git clone [https://github.com/your-username/qlora-clip.git](https://github.com/MonsieurNam/QLORA_CLIP_IxT.git)
     cd qlora-clip
     ```
 
@@ -61,8 +61,7 @@ QLoRA provides immense efficiency gains in both memory and speed without comprom
     pip install torch torchvision torchaudio
     pip install -r requirements.txt
     ```
-    *Note: The `requirements.txt` should include `transformers`, `peft`, `bitsandbytes`, `datasets`, `tqdm`, `scikit-learn`.*
-
+    
 4.  **Download Datasets:**
     The framework supports multiple datasets. You will need to download them and place them in the `DATA/` directory. Refer to `datasets/DATASETS.md` for download links and instructions.
 
