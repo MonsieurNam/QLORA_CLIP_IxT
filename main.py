@@ -1,7 +1,10 @@
-# main.py
 import torch
+import math 
+import bitsandbytes as bnb
+from bitsandbytes.functional import dequantize_4bit
 from transformers import BitsAndBytesConfig, CLIPModel, CLIPProcessor
 from peft import get_peft_model, LoraConfig
+from peft.tuners.lora import LoraLayer
 
 from datasets import build_dataset
 from datasets.utils import DatasetWrapper
@@ -22,7 +25,6 @@ def simple_collate_fn(batch):
     return images_tensor, targets_tensor
 
 def main():
-    # Bước 0: Lấy và thiết lập cấu hình
     args = get_arguments()
     set_random_seed(args.seed)
 
@@ -31,7 +33,6 @@ def main():
         print(f"{arg}: {value}")
     print("==============================\n")
 
-    # Bước 1: Thiết lập Mô hình, Lượng tử hóa và PEFT
     print(">>> Bước 1: Thiết lập Mô hình...")
     model_id_map = {
         'ViT-B/16': 'openai/clip-vit-base-patch16',
@@ -42,7 +43,6 @@ def main():
     if model_id is None:
         raise ValueError(f"Backbone '{args.backbone}' không được hỗ trợ.")
 
-    # Cấu hình dtype và quantization dựa trên --mode
     if args.compute_dtype == 'auto':
         compute_dtype = torch.bfloat16 if torch.cuda.is_available() and torch.cuda.is_bf16_supported() else torch.float16
     else:
@@ -59,11 +59,10 @@ def main():
             bnb_4bit_compute_dtype=compute_dtype,
             bnb_4bit_use_double_quant=True,
         )
-        torch_dtype_for_model = None  # Không cần thiết khi dùng quantization
-    else: # mode == 'lora'
+        torch_dtype_for_model = None
+    else:
         print(f"Chế độ LoRA gốc: Sử dụng dtype={compute_dtype} cho mô hình.")
 
-    # Tải mô hình với cấu hình phù hợp
     model = CLIPModel.from_pretrained(
         model_id,
         quantization_config=quantization_config,
@@ -72,8 +71,47 @@ def main():
     )
     processor = CLIPProcessor.from_pretrained(model_id)
 
-    # Áp dụng cấu hình PEFT (LoRA/DoRA)
-    print(f"\nÁp dụng cấu hình PEFT cho các module: {args.lora_target_modules}")
+    if args.mode == 'qlora':
+        all_possible_linear_layers = ['q_proj', 'k_proj', 'v_proj', 'out_proj', 'fc1', 'fc2']
+        modules_to_dequantize = set(all_possible_linear_layers) - set(args.lora_target_modules)
+
+        if modules_to_dequantize:
+            print(f"\n>>> Can thiệp thủ công: De-quantize các lớp không được target bởi LoRA...")
+            print(f"    Các lớp cần de-quantize: {list(modules_to_dequantize)}")
+
+            high_precision_dtype = model.vision_model.embeddings.patch_embedding.weight.dtype
+            print(f"    Sử dụng dtype '{high_precision_dtype}' cho các lớp de-quantized.")
+
+            for name, module in model.named_modules():
+                module_name_part = name.split('.')[-1]
+
+                if module_name_part in modules_to_dequantize and isinstance(module, bnb.nn.Linear4bit):
+                    parent_name, child_name = name.rsplit('.', 1)
+                    parent_module = model.get_submodule(parent_name)
+
+                    print(f"      - Đang xử lý: {name}")
+
+                    new_linear_module = torch.nn.Linear(
+                        module.in_features,
+                        module.out_features,
+                        bias=module.bias is not None,
+                        device=module.weight.device,
+                        dtype=high_precision_dtype
+                    )
+
+                    dequantized_weight = dequantize_4bit(
+                        module.weight.data, module.weight.quant_state
+                    ).to(high_precision_dtype)
+
+                    new_linear_module.weight.data.copy_(dequantized_weight)
+
+                    if module.bias is not None:
+                        new_linear_module.bias.data.copy_(module.bias.to(high_precision_dtype))
+
+                    setattr(parent_module, child_name, new_linear_module)
+            print("    Hoàn tất de-quantize thủ công.\n")
+
+    print(f"Áp dụng cấu hình PEFT cho các module: {args.lora_target_modules}")
     peft_config_params = {
         "r": args.r,
         "lora_alpha": args.alpha,
@@ -90,7 +128,16 @@ def main():
     model = get_peft_model(model, peft_config)
     model.print_trainable_parameters()
 
-    # Bước 2: Chuẩn bị Dữ liệu
+    if args.r > 0:
+        print("\n!!! CẢNH BÁO: Đang can thiệp và thay đổi công thức scaling của PEFT !!!")
+        new_scaling = args.alpha / math.sqrt(args.r)
+        print(f"Công thức scaling mặc định của PEFT (alpha/r): {args.alpha / args.r}")
+        print(f"Công thức scaling mới (alpha/sqrt(r)): {new_scaling:.4f}")
+        for module in model.modules():
+            if isinstance(module, LoraLayer):
+                if 'default' in module.scaling:
+                    module.scaling['default'] = new_scaling
+
     print("\n>>> Bước 2: Chuẩn bị Dữ liệu...")
     dataset = build_dataset(args.dataset, args.root_path, args.shots)
 
@@ -100,13 +147,14 @@ def main():
         ToTensor(),
         Normalize((0.48145466, 0.4578275, 0.40821073), (0.26862954, 0.26130258, 0.27577711)),
     ])
+
     train_transform = Compose([
-        RandomResizedCrop(224, scale=(0.9, 1.0), interpolation=InterpolationMode.BICUBIC),
+        RandomResizedCrop(size=224, scale=(0.08, 1.0), interpolation=InterpolationMode.BICUBIC),
         RandomHorizontalFlip(p=0.5),
-        ColorJitter(brightness=0.4, contrast=0.4, saturation=0.4),
         ToTensor(),
-        Normalize((0.48145466, 0.4578275, 0.40821073), (0.26862954, 0.26130258, 0.27577711)),
+        Normalize(mean=(0.48145466, 0.4578275, 0.40821073), std=(0.26862954, 0.26130258, 0.27577711))
     ])
+    print("\nSử dụng Data Augmentation giống hệt Dự án 1 (scale 0.08-1.0, không có ColorJitter).")
 
     train_dataset_wrapper = DatasetWrapper(dataset.train_x, transform=train_transform)
     val_dataset_wrapper = DatasetWrapper(dataset.val, transform=eval_transform)
@@ -126,13 +174,12 @@ def main():
         num_workers=2, pin_memory=True, collate_fn=simple_collate_fn
     )
 
-    print(f"Dataset: {args.dataset} ({args.shots} shots)")
+    print(f"\nDataset: {args.dataset} ({args.shots} shots)")
     print(f"  - Số mẫu huấn luyện: {len(dataset.train_x)}")
     print(f"  - Số mẫu validation: {len(dataset.val)}")
     print(f"  - Số mẫu kiểm tra: {len(dataset.test)}")
     print(f"  - Số lớp: {dataset.num_classes}")
 
-    # Bước 3: Khởi tạo và bắt đầu quá trình
     print("\n>>> Bước 3: Khởi tạo và bắt đầu quá trình...")
     trainer = Trainer(args, model, processor, dataset, train_loader, val_loader, test_loader)
     if args.eval_only:

@@ -28,10 +28,11 @@ class Trainer:
         self.val_loader = val_loader
         self.test_loader = test_loader
 
-        self.optimizer = torch.optim.AdamW(
+        self.optimizer = PagedAdamW8bit(
             model.parameters(),
             lr=args.lr,
             betas=(0.9, 0.999),
+            eps=1e-5,
             weight_decay=1e-2
         )
 
