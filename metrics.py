@@ -19,7 +19,7 @@ def cls_acc(output: torch.Tensor, target: torch.Tensor, topk: int = 1) -> float:
         float: Độ chính xác được tính bằng phần trăm (từ 0 đến 100).
     """
     with torch.no_grad():
-        pred = output.topk(topk, 1, True, True)[1]
+        pred = output.float().topk(topk, 1, True, True)[1]
         pred = pred.t()
         correct = pred.eq(target.view(1, -1).expand_as(pred))
         correct_k = correct[:topk].reshape(-1).float().sum(0, keepdim=True)
