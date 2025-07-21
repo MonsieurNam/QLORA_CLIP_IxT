@@ -61,7 +61,7 @@ def main():
             load_in_4bit=True,
             bnb_4bit_quant_type="nf4",
             bnb_4bit_compute_dtype=compute_dtype,
-            bnb_4bit_use_double_quant=False,
+            bnb_4bit_use_double_quant=True,
         )
 
     print(f"  - Tải mô hình '{model_id}'…")
