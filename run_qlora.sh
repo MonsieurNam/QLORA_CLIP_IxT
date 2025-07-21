@@ -1,18 +1,18 @@
 SHOTS=1
 BACKBONE="ViT-B/16"
 SEED=1
-BATCH_SIZE=8
-ACCUM_STEPS=4
-LEARNING_RATE=1e-4  
+BATCH_SIZE=4
+ACCUM_STEPS=8
+LEARNING_RATE=2e-4  
 DROPOUT=0.25
-RANK=16
-ALPHA=32
+RANK=2
+ALPHA=1
 N_ITERS=$((500 * SHOTS))
 export TOKENIZERS_PARALLELISM=false
 
 # 'dtd', 'eurosat', 'caltech101', 'food101', 'oxford_pets', 'stanford_cars', 'oxford_flowers', 'sun397', 'ucf101', 'imagenet', 'fgvc'
 
-DATASETS=("oxford_flowers" )
+DATASETS=("caltech101" )
 
 for DATASET_NAME in "${DATASETS[@]}"; do
 
@@ -31,7 +31,7 @@ for DATASET_NAME in "${DATASETS[@]}"; do
     --alpha "$ALPHA" \
     --seed "$SEED" \
     --dropout_rate "$DROPOUT" \
-    --lora_target_modules q_proj k_proj v_proj out_proj fc1 fc2\
+    --lora_target_modules q_proj k_proj v_proj\
     --batch_size "$BATCH_SIZE" \
     --gradient_accumulation_steps "$ACCUM_STEPS" \
     --n_iters "$N_ITERS" \
