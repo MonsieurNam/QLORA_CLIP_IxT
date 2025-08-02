@@ -2,6 +2,7 @@
 
 import time
 from typing import Dict
+from xml.parsers.expat import model
 
 import torch
 import torch.nn.functional as F
@@ -34,14 +35,10 @@ class Trainer:
         self.val_loader = val_loader
         self.test_loader = test_loader
 
-        # ==================== THAY ĐỔI 3: SỬ DỤNG ADAM8BIT (KHÔNG FUSED) ====================
-        # Adam8bit tiêu chuẩn vẫn tiết kiệm VRAM cho optimizer states so với AdamW 32-bit,
-        # và tương thích với các GPU cũ hơn như Tesla T4.
         print(">>> Sử dụng Adam8bit Optimizer (không fused).")
         self.optimizer = Adam8bit(
             model.parameters(), lr=args.lr, betas=(0.9, 0.999), eps=1e-5, weight_decay=1e-2,
         )
-        # =================================================================================
 
         self.total_updates = args.n_iters * args.shots
         self.scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
@@ -65,7 +62,7 @@ class Trainer:
         model.eval()
         with torch.no_grad(), torch.amp.autocast("cuda", dtype=self.compute_dtype):
             text_feat = model.get_text_features(**txt_inputs)
-        self.text_feat = text_feat / text_feat.norm(dim=-1, keepdim=True)
+        self.text_feat = (text_feat / text_feat.norm(dim=-1, keepdim=True)).to(self.compute_dtype).cuda()       
         model.train()
 
     def train(self):
@@ -90,7 +87,7 @@ class Trainer:
                 with torch.amp.autocast("cuda", dtype=self.compute_dtype):
                     img_feat = self.model.get_image_features(pixel_values=imgs)
                     img_feat = img_feat / img_feat.norm(dim=-1, keepdim=True)
-                    text_feat = self.text_feat.to(img_feat.dtype)
+                    text_feat = self.text_feat
                     logits = (self.model.logit_scale.exp().to(img_feat.dtype) * img_feat @ text_feat.t())
                     loss = F.cross_entropy(logits, tgt) / self.args.gradient_accumulation_steps
 
