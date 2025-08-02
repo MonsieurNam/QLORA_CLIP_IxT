@@ -65,14 +65,14 @@ def main():
         )
 
     print(f"  - Tải mô hình '{model_id}'…")
-    model_kwargs = {}
+    model_kwargs = {"device_map": {"": 0}}
     if quantization_config is not None:
         model_kwargs["quantization_config"] = quantization_config
     else:
         dtype = torch.bfloat16 if args.compute_dtype in ["auto", "bf16"] else torch.float16
         model_kwargs["torch_dtype"] = dtype
 
-    model: CLIPModel = CLIPModel.from_pretrained(model_id, **model_kwargs).to("cuda")  
+    model: CLIPModel = CLIPModel.from_pretrained(model_id, **model_kwargs)
     processor = CLIPProcessor.from_pretrained(model_id)
 
     if args.mode == "qlora":
