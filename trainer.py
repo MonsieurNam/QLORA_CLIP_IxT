@@ -1,28 +1,29 @@
-# @title trainer.py – Sử dụng Adam8bit (không fused)
+# @title trainer.py 
 
 import time
 from typing import Dict
-from xml.parsers.expat import model
 
 import torch
 import torch.nn.functional as F
 from tqdm import tqdm
-from bitsandbytes.optim import Adam8bit # <-- Thay đổi optimizer
+from bitsandbytes.optim import Adam8bit 
 
 from metrics import cls_acc
 
-# -----------------------------------------------------------------------------
-# Helper
-# -----------------------------------------------------------------------------
+def print_gpu_memory_usage(stage=""):
+    """In ra mức sử dụng VRAM đỉnh điểm."""
+    if torch.cuda.is_available():
+        peak_mem_gb = torch.cuda.max_memory_allocated() / (1024**3)
+        print(f"\n--- VRAM CHECKPOINT ({stage}) ---")
+        print(f"    Peak VRAM usage: {peak_mem_gb:.2f} GB")
+        print("---------------------------------\n")
+
 
 def format_time(sec: float) -> str:
     m, s = divmod(sec, 60)
     h, m = divmod(m, 60)
     return f"{int(h):02d}:{int(m):02d}:{int(s):02d}"
 
-# -----------------------------------------------------------------------------
-# Trainer
-# -----------------------------------------------------------------------------
 
 class Trainer:
     def __init__(self, args, model, processor, dataset,
@@ -39,7 +40,6 @@ class Trainer:
         self.optimizer = Adam8bit(
             model.parameters(), lr=args.lr, betas=(0.9, 0.999), eps=1e-5, weight_decay=1e-2,
         )
-
         self.total_updates = args.n_iters * args.shots
         self.scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
             self.optimizer, T_max=self.total_updates, eta_min=1e-6
@@ -62,7 +62,7 @@ class Trainer:
         model.eval()
         with torch.no_grad(), torch.amp.autocast("cuda", dtype=self.compute_dtype):
             text_feat = model.get_text_features(**txt_inputs)
-        self.text_feat = (text_feat / text_feat.norm(dim=-1, keepdim=True)).to(self.compute_dtype).cuda()       
+        self.text_feat = text_feat / text_feat.norm(dim=-1, keepdim=True)
         model.train()
 
     def train(self):
@@ -76,6 +76,7 @@ class Trainer:
         upd, epoch = 0, 0
         self.model.train()
         self.optimizer.zero_grad(set_to_none=True)
+        vram_checked = False
 
         while upd < self.total_updates:
             epoch += 1
@@ -87,7 +88,7 @@ class Trainer:
                 with torch.amp.autocast("cuda", dtype=self.compute_dtype):
                     img_feat = self.model.get_image_features(pixel_values=imgs)
                     img_feat = img_feat / img_feat.norm(dim=-1, keepdim=True)
-                    text_feat = self.text_feat
+                    text_feat = self.text_feat.to(img_feat.dtype)
                     logits = (self.model.logit_scale.exp().to(img_feat.dtype) * img_feat @ text_feat.t())
                     loss = F.cross_entropy(logits, tgt) / self.args.gradient_accumulation_steps
 
@@ -99,6 +100,9 @@ class Trainer:
                     self.optimizer.zero_grad(set_to_none=True)
                     self.scheduler.step()
                     upd += 1
+                    if not vram_checked:
+                        print_gpu_memory_usage("Trong quá trình huấn luyện (sau bước đầu tiên)")
+                        vram_checked = True
                     pbar.set_postfix({"upd": f"{upd}/{self.total_updates}", "lr": f"{self.scheduler.get_last_lr()[0]:.1e}"})
                     if upd >= self.total_updates: break
 

@@ -1,4 +1,4 @@
-# run_utils.py
+# @title run_utils.py
 import argparse
 import random
 import numpy as np
@@ -21,8 +21,9 @@ def get_arguments():
     parser.add_argument('--dataset', type=str, required=True, help='Tên dataset để huấn luyện (ví dụ: dtd, ucf101).')
     parser.add_argument('--root_path', type=str, default='./data', help='Đường dẫn đến thư mục chứa dữ liệu.')
     parser.add_argument('--shots', type=int, default=16, help='Số lượng mẫu few-shot cho mỗi lớp.')
-    parser.add_argument('--backbone', type=str, default='ViT-B/16', choices=['ViT-B/16', 'ViT-B/32', 'ViT-L/14'], help='Kiến trúc CLIP backbone.')
-
+    # parser.add_argument('--backbone', type=str, default='ViT-B/16', choices=['ViT-B/16', 'ViT-B/32', 'ViT-L/14','ViT-g-14','siglip-so400m'], help='Kiến trúc CLIP backbone.')
+    parser.add_argument('--backbone', type=str, default='ViT-B/16',
+                        help='Tên viết tắt (ví dụ: ViT-g-14), repo_id, hoặc đường dẫn đến thư mục cục bộ.')
     # --- Cấu hình Chế độ Huấn luyện ---
     parser.add_argument('--mode', type=str, default='qlora', choices=['qlora', 'lora'],
                         help="Chọn chế độ: 'qlora' (lượng tử hóa 4-bit) hoặc 'lora' (float16/bfloat16).")
@@ -35,6 +36,8 @@ def get_arguments():
     parser.add_argument('--alpha', type=int, default=16, help='Hệ số scale alpha của LoRA.')
     parser.add_argument('--dropout_rate', type=float, default=0.1, help='Tỷ lệ dropout của LoRA.')
     parser.add_argument('--use_dora', action='store_true', help='Sử dụng DoRA thay cho LoRA.')
+    parser.add_argument('--use_gradient_checkpointing', action='store_true',
+                    help='Bật Gradient Checkpointing để tiết kiệm VRAM.')
 
     # --- Cấu hình Quá trình Huấn luyện ---
     parser.add_argument('--n_iters', type=int, default=10000, help='Tổng số vòng lặp huấn luyện.')
@@ -42,7 +45,7 @@ def get_arguments():
     parser.add_argument('--batch_size', type=int, default=8, help='Batch size cho training loader.')
     parser.add_argument('--gradient_accumulation_steps', type=int, default=4, help='Số bước tích lũy gradient.')
     parser.add_argument('--compute_dtype', type=str, default='auto', choices=['auto', 'fp16', 'bf16'], help='Compute dtype (float16 hoặc bfloat16).')
-    
+
     # --- Cấu hình Lưu trữ & Đánh giá ---
     parser.add_argument('--save_path', type=str, default='./checkpoints', help='Đường dẫn để lưu adapter đã huấn luyện.')
     parser.add_argument('--eval_only', action='store_true', help='Chỉ chạy đánh giá trên mô hình đã lưu.')
