@@ -1,4 +1,4 @@
-# @title trainer.py – Sử dụng Adam8bit (không fused)
+# @title trainer.py 
 
 import time
 from typing import Dict
@@ -6,22 +6,24 @@ from typing import Dict
 import torch
 import torch.nn.functional as F
 from tqdm import tqdm
-from bitsandbytes.optim import Adam8bit # <-- Thay đổi optimizer
+from bitsandbytes.optim import Adam8bit 
 
 from metrics import cls_acc
 
-# -----------------------------------------------------------------------------
-# Helper
-# -----------------------------------------------------------------------------
+def print_gpu_memory_usage(stage=""):
+    """In ra mức sử dụng VRAM đỉnh điểm."""
+    if torch.cuda.is_available():
+        peak_mem_gb = torch.cuda.max_memory_allocated() / (1024**3)
+        print(f"\n--- VRAM CHECKPOINT ({stage}) ---")
+        print(f"    Peak VRAM usage: {peak_mem_gb:.2f} GB")
+        print("---------------------------------\n")
+
 
 def format_time(sec: float) -> str:
     m, s = divmod(sec, 60)
     h, m = divmod(m, 60)
     return f"{int(h):02d}:{int(m):02d}:{int(s):02d}"
 
-# -----------------------------------------------------------------------------
-# Trainer
-# -----------------------------------------------------------------------------
 
 class Trainer:
     def __init__(self, args, model, processor, dataset,
@@ -34,15 +36,10 @@ class Trainer:
         self.val_loader = val_loader
         self.test_loader = test_loader
 
-        # ==================== THAY ĐỔI 3: SỬ DỤNG ADAM8BIT (KHÔNG FUSED) ====================
-        # Adam8bit tiêu chuẩn vẫn tiết kiệm VRAM cho optimizer states so với AdamW 32-bit,
-        # và tương thích với các GPU cũ hơn như Tesla T4.
         print(">>> Sử dụng Adam8bit Optimizer (không fused).")
         self.optimizer = Adam8bit(
             model.parameters(), lr=args.lr, betas=(0.9, 0.999), eps=1e-5, weight_decay=1e-2,
         )
-        # =================================================================================
-
         self.total_updates = args.n_iters * args.shots
         self.scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
             self.optimizer, T_max=self.total_updates, eta_min=1e-6
@@ -79,6 +76,7 @@ class Trainer:
         upd, epoch = 0, 0
         self.model.train()
         self.optimizer.zero_grad(set_to_none=True)
+        vram_checked = False
 
         while upd < self.total_updates:
             epoch += 1
@@ -102,6 +100,9 @@ class Trainer:
                     self.optimizer.zero_grad(set_to_none=True)
                     self.scheduler.step()
                     upd += 1
+                    if not vram_checked:
+                        print_gpu_memory_usage("Trong quá trình huấn luyện (sau bước đầu tiên)")
+                        vram_checked = True
                     pbar.set_postfix({"upd": f"{upd}/{self.total_updates}", "lr": f"{self.scheduler.get_last_lr()[0]:.1e}"})
                     if upd >= self.total_updates: break
 

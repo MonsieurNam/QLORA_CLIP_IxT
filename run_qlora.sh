@@ -1,45 +1,57 @@
-SHOTS=1
-BACKBONE="ViT-B/16"
-SEED=1
-BATCH_SIZE=4
-ACCUM_STEPS=8
-LEARNING_RATE=2e-4  
-DROPOUT=0.25
+#!/bin/bash
+
+DATASETS=('dtd' 'eurosat' 'caltech101' 'food101' 'oxford_pets' 'oxford_flowers' 'ucf101' 'fgvc')
+SHOTS=(1)
+ADAPTER_TYPE="qlora"
+LEARNING_RATE="2e-4"
 RANK=2
 ALPHA=1
-N_ITERS=$((500 * SHOTS))
+LORA_PARAMS="q_proj k_proj v_proj"
+N_ITERS=500
+BATCH_SIZE=4
+ACCUM_STEPS=8
+ROOT_PATH="/root/DATA"
+SAVE_PATH="/root/QLORA_CLIP_IxT/checkpoints"
+LOG_DIR="/root/QLORA_CLIP_IxT/logs_qlora"
 export TOKENIZERS_PARALLELISM=false
 
-# 'dtd', 'eurosat', 'caltech101', 'food101', 'oxford_pets', 'stanford_cars', 'oxford_flowers', 'sun397', 'ucf101', 'imagenet', 'fgvc'
+mkdir -p "$LOG_DIR"
 
-DATASETS=("caltech101" )
+for DATASET in "${DATASETS[@]}"; do
+  for SHOT in "${SHOTS[@]}"; do
 
-for DATASET_NAME in "${DATASETS[@]}"; do
+    CONFIG_NAME="${ADAPTER_TYPE}_${DATASET}_${SHOT}shot_bs${BATCH_SIZE}_acc${ACCUM_STEPS}"
+    LOG_FILE="${LOG_DIR}/${CONFIG_NAME}.log"
 
-  echo "==========================================================="
-  echo "Bắt đầu huấn luyện QLoRA trên: ${DATASET_NAME}"
-  echo "==========================================================="
+    rm -f "$LOG_FILE"
 
-  python main.py \
-    --mode "qlora" \
-    --dataset "$DATASET_NAME" \
-    --root_path "/content/DATA" \
-    --shots "$SHOTS" \
-    --backbone "$BACKBONE" \
-    --lr "$LEARNING_RATE" \
-    --r "$RANK" \
-    --alpha "$ALPHA" \
-    --seed "$SEED" \
-    --dropout_rate "$DROPOUT" \
-    --lora_target_modules q_proj k_proj v_proj\
-    --batch_size "$BATCH_SIZE" \
-    --gradient_accumulation_steps "$ACCUM_STEPS" \
-    --n_iters "$N_ITERS" \
-    --save_path "/content/checkpoints"
+    echo "======================================================================"
+    echo "Starting run: ${CONFIG_NAME}"
+    echo "======================================================================"
 
-  echo "Hoàn tất huấn luyện QLoRA trên: ${DATASET_NAME}"
-  echo ""
+    COMMAND="python3 /root/QLORA_CLIP_IxT/main.py \
+      --mode ${ADAPTER_TYPE} \
+      --dataset ${DATASET} \
+      --root_path ${ROOT_PATH} \
+      --shots ${SHOT} \
+      --n_iters ${N_ITERS} \
+      --batch_size ${BATCH_SIZE} \
+      --gradient_accumulation_steps ${ACCUM_STEPS} \
+      --backbone ViT-B/16 \
+      --dropout_rate 0.25 \
+      --seed 1 \
+      --lr ${LEARNING_RATE} \
+      --r ${RANK} \
+      --alpha ${ALPHA} \
+      --lora_target_modules ${LORA_PARAMS} \
+      --save_path ${SAVE_PATH}/${DATASET}/${CONFIG_NAME}"
 
+    echo "Executing command:"
+    echo "${COMMAND}"
+    echo ""
+
+    eval ${COMMAND} > "${LOG_FILE}" 2>&1
+  done
 done
 
-echo "Tất cả các thí nghiệm QLoRA đã hoàn tất!"
+echo "✅ All QLoRA experiments completed."
