@@ -46,12 +46,13 @@ QLoRA provides immense efficiency gains in both memory and speed without comprom
 1.  **Clone the repository:**
     ```bash
     git clone https://github.com/MonsieurNam/QLORA_CLIP_IxT.git
-    cd qlora-clip
+    cd /root/QLORA_CLIP_IxT
     ```
 
 2.  **Create a Python virtual environment (recommended):**
     ```bash
-    python -m venv venv
+    apt install python3.10-venv
+    python3 -m venv venv
     source venv/bin/activate
     ```
 
