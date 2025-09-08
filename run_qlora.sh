@@ -1,57 +1,60 @@
 #!/bin/bash
-
-DATASETS=('dtd' 'eurosat' 'caltech101' 'food101' 'oxford_pets' 'oxford_flowers' 'ucf101' 'fgvc')
-SHOTS=(1)
-ADAPTER_TYPE="qlora"
-LEARNING_RATE="2e-4"
+SHOTS_DEFAULT=1
+BACKBONE="ViT-B/16"
+SEED=1
+LEARNING_RATE=2e-4
+DROPOUT=0.25
 RANK=2
 ALPHA=1
-LORA_PARAMS="q_proj k_proj v_proj"
 N_ITERS=500
-BATCH_SIZE=4
-ACCUM_STEPS=8
-ROOT_PATH="/root/DATA"
-SAVE_PATH="/root/QLORA_CLIP_IxT/checkpoints"
-LOG_DIR="/root/QLORA_CLIP_IxT/logs_qlora"
 export TOKENIZERS_PARALLELISM=false
 
+MODE="lora"
+
+DATASETS=('dtd' 'eurosat' 'caltech101' 'oxford_pets' 'oxford_flowers' 'ucf101' 'fgvc')
+
+BS_ACC_PAIRS=("1:32" "2:16" "4:8" "8:4" "16:2" "32:1")
+
+SHOTS_LIST=(1 4 16)
+
+LOG_DIR="./logs/${MODE}"
 mkdir -p "$LOG_DIR"
 
-for DATASET in "${DATASETS[@]}"; do
-  for SHOT in "${SHOTS[@]}"; do
+for SHOTS in "${SHOTS_LIST[@]}"; do
 
-    CONFIG_NAME="${ADAPTER_TYPE}_${DATASET}_${SHOT}shot_bs${BATCH_SIZE}_acc${ACCUM_STEPS}"
-    LOG_FILE="${LOG_DIR}/${CONFIG_NAME}.log"
+  for PAIR in "${BS_ACC_PAIRS[@]}"; do
+    IFS=":" read -r BATCH_SIZE ACCUM_STEPS <<< "$PAIR"
 
-    rm -f "$LOG_FILE"
+    for DATASET_NAME in "${DATASETS[@]}"; do
+      echo "==========================================================="
+      echo "Bắt đầu huấn luyện ${MODE} | dataset=${DATASET_NAME} | shots=${SHOTS} | bs=${BATCH_SIZE} | acc=${ACCUM_STEPS}"
+      echo "==========================================================="
 
-    echo "======================================================================"
-    echo "Starting run: ${CONFIG_NAME}"
-    echo "======================================================================"
+      LOG_FILE="${LOG_DIR}/${DATASET_NAME}_shots${SHOTS}_bs${BATCH_SIZE}_acc${ACCUM_STEPS}_${MODE}.log"
 
-    COMMAND="python3 /root/QLORA_CLIP_IxT/main.py \
-      --mode ${ADAPTER_TYPE} \
-      --dataset ${DATASET} \
-      --root_path ${ROOT_PATH} \
-      --shots ${SHOT} \
-      --n_iters ${N_ITERS} \
-      --batch_size ${BATCH_SIZE} \
-      --gradient_accumulation_steps ${ACCUM_STEPS} \
-      --backbone ViT-B/16 \
-      --dropout_rate 0.25 \
-      --seed 1 \
-      --lr ${LEARNING_RATE} \
-      --r ${RANK} \
-      --alpha ${ALPHA} \
-      --lora_target_modules ${LORA_PARAMS} \
-      --save_path ${SAVE_PATH}/${DATASET}/${CONFIG_NAME}"
+      python3 main.py \
+        --mode "$MODE" \
+        --dataset "$DATASET_NAME" \
+        --root_path "/root/DATA" \
+        --shots "$SHOTS" \
+        --backbone "$BACKBONE" \
+        --lr "$LEARNING_RATE" \
+        --r "$RANK" \
+        --alpha "$ALPHA" \
+        --seed "$SEED" \
+        --dropout_rate "$DROPOUT" \
+        --lora_target_modules q_proj k_proj v_proj \
+        --batch_size "$BATCH_SIZE" \
+        --gradient_accumulation_steps "$ACCUM_STEPS" \
+        --n_iters "$N_ITERS" \
+        --save_path "/root/checkpoints" \
+        >"$LOG_FILE" 2>&1
 
-    echo "Executing command:"
-    echo "${COMMAND}"
-    echo ""
-
-    eval ${COMMAND} > "${LOG_FILE}" 2>&1
+      echo "Hoàn tất ${MODE} trên: ${DATASET_NAME} (shots=${SHOTS}, bs=${BATCH_SIZE}, acc=${ACCUM_STEPS})"
+      echo "Log: $LOG_FILE"
+      echo ""
+    done
   done
 done
 
-echo "✅ All QLoRA experiments completed."
+echo "Tất cả các thí nghiệm ${MODE} đã hoàn tất!"

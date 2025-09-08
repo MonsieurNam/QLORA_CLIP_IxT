@@ -75,7 +75,7 @@ We provide convenient shell scripts to run experiments for LoRA, QLoRA, and DoRA
 
 1.  **Make scripts executable:**
     ```bash
-    chmod +x run_lora.sh run_qlora.sh run_dora.sh
+    chmod +x run_qlora.sh 
     ```
 
 2.  **Execute the desired script:**
@@ -83,12 +83,6 @@ We provide convenient shell scripts to run experiments for LoRA, QLoRA, and DoRA
     # To run the main QLoRA experiment
     ./run_qlora.sh
 
-    # To run the full-precision LoRA baseline
-    ./run_lora.sh
-    
-    # To run the DoRA experiment
-    ./run_dora.sh
-    ```
 
 ### Monitoring VRAM Usage
 
