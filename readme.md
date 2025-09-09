@@ -75,13 +75,13 @@ We provide convenient shell scripts to run experiments for LoRA, QLoRA, and DoRA
 
 1.  **Make scripts executable:**
     ```bash
-    chmod +x run_qlora.sh 
+    chmod +x run.sh 
     ```
 
 2.  **Execute the desired script:**
     ```bash
     # To run the main QLoRA experiment
-    ./run_qlora.sh
+    ./run.sh
 
 
 ### Monitoring VRAM Usage
@@ -97,30 +97,37 @@ watch -n 1 nvidia-smi
 2.  **Run the following commands** in a Colab notebook cell:
     ```python
     # Make scripts executable
-    !chmod +x /content/QLORA_CLIP_IxT/run_qlora.sh
-    !chmod +x /content/QLORA_CLIP_IxT/run_lora.sh
-    !chmod +x /content/QLORA_CLIP_IxT/run_dora.sh
+    !chmod +x /content/QLORA_CLIP_IxT/run.sh
 
     # Run the QLoRA experiment
-    !bash /content/QLORA_CLIP_IxT/run_qlora.sh
+    !bash /content/QLORA_CLIP_IxT/run.sh
     ```
 
 ## Project Structure
 ```
-qlora-clip/
-├── main.py             # Main entry point for experiments
-├── trainer.py          # Core training and evaluation logic
-├── run_utils.py        # Argument parsing and setup utilities
-├── metrics.py          # Accuracy calculation functions
-├── run_lora.sh         # Script to run LoRA experiments
-├── run_qlora.sh        # Script to run QLoRA experiments
-├── run_dora.sh         # Script to run DoRA experiments
-├── datasets/           # Folder containing data loading logic for each dataset
-│   ├── __init__.py     # Dataset factory (build_dataset)
-│   ├── caltech101.py
-│   └── ...
-└── DATA/               # Directory to store raw dataset files
-    └── ...
+📦CLIP-QLoRA_I2T
+ ┣ 📂datasets
+ ┃ ┣ 📜caltech101.py
+ ┃ ┣ 📜dtd.py
+ ┃ ┣ 📜eurosat.py
+ ┃ ┣ 📜fgvc.py
+ ┃ ┣ 📜food101.py
+ ┃ ┣ 📜imagenet.py
+ ┃ ┣ 📜oxford_flowers.py
+ ┃ ┣ 📜oxford_pets.py
+ ┃ ┣ 📜stanford_cars.py
+ ┃ ┣ 📜sun397.py
+ ┃ ┣ 📜ucf101.py
+ ┃ ┣ 📜utils.py
+ ┃ ┗ 📜__init__.py
+ ┣ 📜DATASETS.md
+ ┣ 📜main.py
+ ┣ 📜metrics.py
+ ┣ 📜readme.md
+ ┣ 📜requirements.txt
+ ┣ 📜run.sh
+ ┣ 📜run_utils.py
+ ┗ 📜trainer.py
 ```
 
 ## Citation
