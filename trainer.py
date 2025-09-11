@@ -6,7 +6,7 @@ from typing import Dict
 import torch
 import torch.nn.functional as F
 from tqdm import tqdm
-from bitsandbytes.optim import Adam8bit 
+from bitsandbytes.optim import AdamW8bitPaged as PagedAdamW
 
 from metrics import cls_acc
 
@@ -37,7 +37,7 @@ class Trainer:
         self.test_loader = test_loader
 
         print(">>> Sử dụng Adam8bit Optimizer (không fused).")
-        self.optimizer = Adam8bit(
+        self.optimizer = PagedAdamW(
             model.parameters(), lr=args.lr, betas=(0.9, 0.999), eps=1e-5, weight_decay=1e-2,
         )
         self.total_updates = args.n_iters * args.shots
