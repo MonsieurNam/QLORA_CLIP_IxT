@@ -6,7 +6,8 @@ from typing import Dict
 import torch
 import torch.nn.functional as F
 from tqdm import tqdm
-from bitsandbytes.optim import AdamW8bitPaged as PagedAdamW
+from bitsandbytes.optim import PagedAdamW8bit as PagedAdamW
+from run_utils import print_gpu_memory_usage, get_system_vram_usage
 
 from metrics import cls_acc
 
@@ -69,9 +70,32 @@ class Trainer:
         eff_bs = self.args.batch_size * self.args.gradient_accumulation_steps
         print("\n===== Bắt đầu Huấn luyện =====")
         print(f"Số update: {self.total_updates} | micro-bs={self.args.batch_size} | eff-bs={eff_bs}")
-
+        
+        # --- BẮT ĐẦU THAY ĐỔI: THÊM WARM-UP ---
+        print("\n>>> Bắt đầu giai đoạn Warm-up (1 vòng lặp)...")
+        try:
+            # Lấy một batch để warm-up
+            warmup_imgs, warmup_tgt = next(iter(self.train_loader))
+            warmup_imgs, warmup_tgt = warmup_imgs.to(self.model.device), warmup_tgt.to(self.model.device)
+            
+            # Chạy một lượt forward/backward hoàn chỉnh
+            with torch.amp.autocast("cuda", dtype=self.compute_dtype):
+                img_feat = self.model.get_image_features(pixel_values=warmup_imgs)
+                img_feat = img_feat / img_feat.norm(dim=-1, keepdim=True)
+                text_feat = self.text_feat.to(img_feat.dtype)
+                logits = (self.model.logit_scale.exp().to(img_feat.dtype) * img_feat @ text_feat.t())
+                loss = F.cross_entropy(logits, warmup_tgt)
+                
+            self.scaler.scale(loss).backward()
+            self.optimizer.zero_grad(set_to_none=True)
+            print(">>> Warm-up hoàn tất.")
+        except StopIteration:
+            print("Cảnh báo: DataLoader quá nhỏ để thực hiện warm-up.")
+        
+        # BẮT ĐẦU ĐO LƯỜNG CHÍNH THỨC
         if torch.cuda.is_available(): torch.cuda.reset_peak_memory_stats()
-        start = time.time()
+        start_time = time.time()
+        # --- KẾT THÚC THAY ĐỔI ---
 
         upd, epoch = 0, 0
         self.model.train()
@@ -101,13 +125,29 @@ class Trainer:
                     self.scheduler.step()
                     upd += 1
                     if not vram_checked:
+                        torch.cuda.synchronize()
                         print_gpu_memory_usage("Trong quá trình huấn luyện (sau bước đầu tiên)")
+                        # --- KẾT THÚC SỬA ĐỔI ---
                         vram_checked = True
                     pbar.set_postfix({"upd": f"{upd}/{self.total_updates}", "lr": f"{self.scheduler.get_last_lr()[0]:.1e}"})
                     if upd >= self.total_updates: break
+                    
+        torch.cuda.synchronize()
+        runtime = format_time(time.time() - start_time)
+        peak_allocated_gb = torch.cuda.max_memory_allocated() / (1024**3)
+        peak_reserved_gb = torch.cuda.max_memory_reserved() / (1024**3)
+        
+        print("\n--- Thống kê Hiệu năng ---")
+        print(f"    Thời gian Huấn luyện : {runtime}")
+        print(f"    Peak VRAM (PyTorch)   : {peak_allocated_gb:.2f} GB (Allocated)")
+        print(f"    Peak VRAM (PyTorch)   : {peak_reserved_gb:.2f} GB (Reserved)")
 
-        runtime, peak = format_time(time.time() - start), torch.cuda.max_memory_allocated() / 1024 ** 3
-        print(f"\n--- Stats ---\nTime : {runtime}\nVRAM : {peak:.2f} GB (peak)")
+        system_vram_used, system_vram_total = get_system_vram_usage()
+        if system_vram_used is not None:
+            print(f"    Peak VRAM (Hệ thống)   : {system_vram_used:.2f} / {system_vram_total:.2f} GB")
+        print("--------------------------")
+        # --- KẾT THÚC THAY ĐỔI ---
+        
         self.evaluate("test")
 
     def evaluate(self, split="test"):

@@ -4,6 +4,20 @@ import random
 import numpy as np
 import torch
 
+try:
+    import pynvml
+    pynvml.nvmlInit()
+    NVML_AVAILABLE = True
+except ImportError:
+    NVML_AVAILABLE = False
+    
+def print_gpu_memory_usage(stage=""):
+    """In ra mức sử dụng VRAM đỉnh điểm từ PyTorch."""
+    if torch.cuda.is_available():
+        peak_allocated_gb = torch.cuda.max_memory_allocated() / (1024**3)
+        peak_reserved_gb = torch.cuda.max_memory_reserved() / (1024**3)
+        print(f"[{stage}] Peak PyTorch VRAM: {peak_allocated_gb:.2f} GB (Allocated) | {peak_reserved_gb:.2f} GB (Reserved)")
+
 def set_random_seed(seed):
     """Thiết lập random seed để đảm bảo tính tái lập."""
     random.seed(seed)
@@ -11,6 +25,19 @@ def set_random_seed(seed):
     torch.manual_seed(seed)
     if torch.cuda.is_available():
         torch.cuda.manual_seed_all(seed)
+
+def get_system_vram_usage():
+    """Lấy mức sử dụng VRAM từ driver NVIDIA (giống nvidia-smi)."""
+    if not NVML_AVAILABLE or not torch.cuda.is_available():
+        if not NVML_AVAILABLE:
+            print("Cảnh báo: Thư viện 'pynvml' chưa được cài đặt. Không thể đo VRAM hệ thống. Hãy chạy 'pip install pynvml'.")
+        return None, None
+    
+    handle = pynvml.nvmlDeviceGetHandleByIndex(torch.cuda.current_device())
+    mem_info = pynvml.nvmlDeviceGetMemoryInfo(handle)
+    used_gb = mem_info.used / (1024**3)
+    total_gb = mem_info.total / (1024**3)
+    return used_gb, total_gb
 
 def get_arguments():
     """Định nghĩa và phân tích các tham số dòng lệnh."""

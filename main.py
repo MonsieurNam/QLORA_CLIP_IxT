@@ -4,19 +4,22 @@ from __future__ import annotations
 
 import os
 import torch
+torch.backends.cudnn.benchmark = False
+
 from transformers import AutoModel, AutoProcessor, AutoTokenizer, CLIPModel, CLIPProcessor, BitsAndBytesConfig
 from peft import LoraConfig, get_peft_model
 from peft.utils import prepare_model_for_kbit_training
 
 from datasets import build_dataset
 from datasets.utils import DatasetWrapper
+from run_utils import get_arguments, set_random_seed, print_gpu_memory_usage, get_system_vram_usage
+
 from torchvision.transforms import (
     Compose, ToTensor, Normalize, RandomResizedCrop, RandomHorizontalFlip,
     Resize, CenterCrop, InterpolationMode,
 )
 from torch.utils.data import DataLoader
 
-from run_utils import get_arguments, set_random_seed
 from trainer import Trainer
 
 def prepare_vision_model_for_kbit_training(model, use_gradient_checkpointing=True):
@@ -49,12 +52,6 @@ def prepare_vision_model_for_kbit_training(model, use_gradient_checkpointing=Tru
             model.text_model.embeddings.register_forward_hook(make_inputs_require_grad)
 
     return model
-
-def print_gpu_memory_usage(stage=""):
-    """In ra mức sử dụng VRAM hiện tại và đỉnh điểm."""
-    if torch.cuda.is_available():
-        peak_mem_gb = torch.cuda.max_memory_allocated() / (1024**3)
-        print(f"[{stage}] Peak VRAM usage: {peak_mem_gb:.2f} GB")
 
 def simple_collate_fn(batch):
     images = torch.stack([b[0] for b in batch], dim=0)
