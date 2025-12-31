@@ -1,143 +1,122 @@
-
-# QLoRA-VLM: Efficient Few-Shot Adaptation of Vision-Language Models
+# Dissecting QLoRA's Efficiency for VLM Adaptation
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Hugging Face](https://img.shields.io/badge/%F0%9F%A4%97%20Hugging%20Face-PEFT%20%7C%20BitsAndBytes-orange)](https://huggingface.co/)
 
-Official implementation for the paper **"QLoRA-VLM: Efficient Few-Shot Adaptation of Vision-Language Models with Quantized Low-Rank Adapters"**. This repository provides a comprehensive framework for fine-tuning Vision-Language Models (VLMs) like CLIP using modern Parameter-Efficient Fine-Tuning (PEFT) techniques, including LoRA, QLoRA, and DoRA.
+Official implementation for the paper **"Dissecting QLoRA's Efficiency for VLM Adaptation: A Practical Analysis of Static vs. Dynamic Memory"**.
 
-This work starts by replicating and modernizing the strong baseline from [CLIP-LORA (Zanella et al., 2024)](https://github.com/MaxZanella/CLIP-LORA), and extends it to investigate the efficacy of 4-bit quantization. Our findings demonstrate that QLoRA is not only exceptionally memory-efficient but also surprisingly faster than its full-precision LoRA counterpart, all while achieving state-of-the-art accuracy in few-shot settings.
+This repository provides a systematic investigation into the practical trade-offs of applying Quantized LoRA (QLoRA) to CLIP-style Vision-Language Models. While QLoRA is a standard for LLMs, our analysis reveals a critical distinction between static and dynamic memory consumption when applied to VLMs.
 
-## Key Features & Contributions
+## 📄 Abstract & Key Findings
 
-- **QLoRA for VLMs:** The first, to our knowledge, systematic study and implementation of QLoRA for few-shot VLM adaptation.
-- **Transformative Efficiency:** Drastically reduces resource requirements, with over **60% less VRAM** usage and up to **35% faster training times** compared to standard LoRA.
-- **State-of-the-Art Performance:** Matches or exceeds the performance of strong LoRA baselines and other prompt-tuning methods across a wide range of benchmarks.
-- **Reproducibility & Modernization:** Built on standard, industry-leading libraries like Hugging Face `Transformers`, `PEFT`, and `BitsAndBytes` for robust and reproducible research.
-- **Flexible PEFT Framework:** Easily switch between LoRA, QLoRA, and DoRA fine-tuning strategies via simple command-line arguments.
+While QLoRA is often touted for efficiency, our in-depth analysis on CLIP models reveals a nuanced reality:
 
-## Highlighted Results
+* **The Paradox:** While QLoRA reduces *static* model weight memory by **62%**, its *dynamic* memory consumption during training can paradoxically exceed that of standard LoRA due to de-quantization overhead.
+* **The Trade-off:** Standard LoRA remains superior in terms of **Accuracy** (+2.48% vs QLoRA) and **Training Speed** (1.8x faster).
+* **The Optimization Pathway:** We demonstrate that combining QLoRA with **Gradient Checkpointing** is essential to unlock its true potential, reducing peak training VRAM to an exceptionally low **0.17 GB**, making it the ultimate choice for consumer-grade hardware constraints.
 
-### 1. Performance Benchmark (4-shot)
+## 📊 Experimental Results
 
-Our QLoRA approach achieves a higher average accuracy compared to the original CLIP-LoRA and other prominent methods, demonstrating its effectiveness.
+### 1. Resource Consumption Analysis (Memory & Time)
 
-| Method | Aircraft | EuroSAT | Food | Pets | Flowers | Caltech | DTD | UCF | **Average** |
-| :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
-| PLOT++ (ICLR’23) | 35.3 | 83.2 | 86.5 | 92.6 | 92.9 | 95.1 | 62.4 | 79.8 | 78.48 |
-| CLIP-LoRA (Zanella et al.)| **37.9** | 84.9 | 82.7 | 91.0 | **93.7** | 95.2 | 63.8 | **81.1** | 78.79 |
-| **CLIP-QLoRA (Ours)** | 34.68 | **89.43** | **84.3** | **92.34** | 91.64 | **95.38** | **66.31** | 80.52 | **79.33** |
+*Benchmarks conducted on NVIDIA RTX 4090.*
 
-### 2. Resource Efficiency on Caltech101
-
-QLoRA provides immense efficiency gains in both memory and speed without compromising accuracy.
-
-| Shots | Method | Training Time | Peak VRAM (GB) | Final Accuracy (%) |
+| Method | Configuration | Static VRAM (Load) | **Peak VRAM (Training)** | Training Time (Example) |
 | :--- | :--- | :--- | :--- | :--- |
-| **1-shot** | LoRA | 00:04:58 | 4.71 | 93.70 |
-| | **QLoRA** | **00:03:08** | **1.75** | **93.79** |
-| **4-shot** | LoRA | 00:19:05 | 4.71 | 95.20 |
-| | **QLoRA** | **00:12:22** | **1.75** | **95.38** |
-| **16-shot**| LoRA | 01:06:36 | 4.71 | 96.40 |
-| | **QLoRA** | **00:48:46** | **1.75** | **96.43** |
+| **LoRA** (Baseline) | Balanced (4x8) | 0.29 GB | **0.71 GB** | **06:46** (Fastest) |
+| **QLoRA** (Standard) | Balanced (4x8) | **0.11 GB** | 1.02 GB | 12:13 |
+| **QLoRA + Grad Checkpointing** | Balanced (4x8) | **0.11 GB** | **0.17 GB** (Lowest) | 14:55 |
 
-## Setup and Installation
+> **Insight:** QLoRA saves static memory but incurs higher dynamic memory costs. Only by enabling Gradient Checkpointing do we achieve the lowest possible memory footprint (0.17 GB).
+
+### 2. Performance Benchmark (4-shot Accuracy)
+
+Comparison of Average Accuracy across 8 datasets (EuroSAT, DTD, Caltech101, OxfordPets, OxfordFlowers, Food101, FGVC, UCF101).
+
+| Method | Average Accuracy | Notes |
+| :--- | :--- | :--- |
+| **CLIP-LoRA (Zanella et al.)** | **78.79%** | Best Accuracy & Speed |
+| **CLIP-QLoRA (Ours)** | 76.31% | Best Memory Efficiency (with GC) |
+
+While 4-bit quantization incurs a slight performance cost (~2.5%), it remains a competitive option for extreme hardware constraints.
+
+## 🛠 Setup and Installation
 
 1.  **Clone the repository:**
     ```bash
-    git clone https://github.com/MonsieurNam/QLORA_CLIP_IxT.git
-    cd /root/QLORA_CLIP_IxT
+    git clone [https://github.com/MonsieurNam/QLORA_CLIP_IxT.git](https://github.com/MonsieurNam/QLORA_CLIP_IxT.git)
+    cd QLORA_CLIP_IxT
     ```
 
-2.  **Create a Python virtual environment (recommended):**
+2.  **Create a Python virtual environment:**
     ```bash
-    apt install python3.10-venv
     python3 -m venv venv
     source venv/bin/activate
     ```
 
 3.  **Install dependencies:**
-    We recommend using PyTorch 2.1 or higher with CUDA 11.8 or 12.1.
     ```bash
-    pip install "numpy<2.0"
     pip install torch==2.1.1 torchvision==0.16.1
     pip install -r requirements.txt
     ```
-    
-4.  **Download Datasets:**
-    The framework supports multiple datasets. You will need to download them and place them in the `DATA/` directory. Refer to `datasets/DATASETS.md` for download links and instructions.
 
-## Training and Evaluation
+## 🚀 Usage
 
-We provide convenient shell scripts to run experiments for LoRA, QLoRA, and DoRA. You can customize these scripts to change datasets, hyperparameters, and other settings.
+We provide shell scripts to reproduce our experiments. You can switch between LoRA and QLoRA modes.
 
-### Running on a Local Machine (e.g., with RTX 4090)
+### Training Command
 
-1.  **Make scripts executable:**
-    ```bash
-    chmod +x run.sh 
-    ```
+To reproduce the **low-memory QLoRA** results (0.17 GB VRAM), ensure you enable gradient checkpointing or use a high accumulation step count if mimicking the "Low Memory" setup from the paper.
 
-2.  **Execute the desired script:**
-    ```bash
-    # To run the main QLoRA experiment
-    ./run.sh
-
-
-### Monitoring VRAM Usage
-
-To monitor GPU memory usage during training, open a new terminal and run:
 ```bash
-watch -n 1 nvidia-smi
+# Example: Run QLoRA with high memory efficiency
+python3 main.py \
+    --mode "qlora" \
+    --dataset "caltech101" \
+    --shots 4 \
+    --batch_size 4 \
+    --gradient_accumulation_steps 8
+```
+### To run the full benchmark suite:
+
+```bash
+chmod +x run.sh
+./run.sh
 ```
 
-### Running on Google Colab (e.g., with T4 GPU)
-
-1.  **Upload the project** to your Google Drive or clone it directly.
-2.  **Run the following commands** in a Colab notebook cell:
-    ```python
-    # Make scripts executable
-    !chmod +x /content/QLORA_CLIP_IxT/run.sh
-
-    # Run the QLoRA experiment
-    !bash /content/QLORA_CLIP_IxT/run.sh
-    ```
-
-## Project Structure
-```
-📦CLIP-QLoRA_I2T
- ┣ 📂datasets
- ┃ ┣ 📜caltech101.py
- ┃ ┣ 📜dtd.py
- ┃ ┣ 📜eurosat.py
- ┃ ┣ 📜fgvc.py
- ┃ ┣ 📜food101.py
- ┃ ┣ 📜imagenet.py
- ┃ ┣ 📜oxford_flowers.py
- ┃ ┣ 📜oxford_pets.py
- ┃ ┣ 📜stanford_cars.py
- ┃ ┣ 📜sun397.py
- ┃ ┣ 📜ucf101.py
- ┃ ┣ 📜utils.py
- ┃ ┗ 📜__init__.py
- ┣ 📜DATASETS.md
- ┣ 📜main.py
- ┣ 📜metrics.py
- ┣ 📜readme.md
- ┣ 📜requirements.txt
- ┣ 📜run.sh
- ┣ 📜run_utils.py
- ┗ 📜trainer.py
+## 📂 Project Structure
+```bash
+📦QLORA_CLIP_IxT
+ ┣ 📂datasets          # Data loaders for 8 benchmark datasets
+ ┣ 📂logs_full_dataset # Training logs
+ ┣ 📜main.py           # Main entry point
+ ┣ 📜trainer.py        # Training logic (LoRA/QLoRA implementation)
+ ┣ 📜run.sh            # Experiment script
+ ┗ 📜requirements.txt
 ```
 
-## Citation
-If you find this work useful for your research, please consider citing our paper:
+## 🎓 Citation
+### If you use this code or findings in your research, please cite our paper:
 
-```bibtex
-comming soon
+```bash
+
+@article{nam2025dissecting,
+  title={Dissecting QLoRA's Efficiency for VLM Adaptation: A Practical Analysis of Static vs. Dynamic Memory},
+  author={Nguyen, Ngo Nhat Nam and Le, Phan Quynh Nhi and Nguyen, Vinh Nghi and Le, Ngoc Anh Thu and Tran, Ngoc Hoang},
+  journal={FPT University Can Tho},
+  year={2025}
+}
 ```
 
+### 👥 Authors & Acknowledgements
 
-## Acknowledgements
-This work builds upon the insights and strong baseline established by the [CLIP-LORA](https://github.com/MaxZanella/CLIP-LORA) project. We are also grateful for the powerful open-source libraries from [Hugging Face](https://huggingface.co/) that made this research possible.
-```
+Authors: Nguyen Ngo Nhat Nam, Le Phan Quynh Nhi, Nguyen Vinh Nghi, Le Ngoc Anh Thu, Tran Ngoc Hoang. Affiliation: Department of Artificial Intelligence, FPT University Can Tho, Vietnam.
+
+This work builds upon the CLIP-LORA baseline. We thank the open-source community for libraries like bitsandbytes and peft.
+
+
+
+
+
+
+
